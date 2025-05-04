@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Manage Products</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { padding: 2rem; }
+    .product-item img { max-width: 100px; max-height: 100px; object-fit: cover; }
+    #response-message { margin-top: 1rem; padding: 0.5rem; border-radius: 4px; }
+    .success { background-color: #d1fae5; color: #065f46; }
+    .error { background-color: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body class="bg-gray-100">
+
+  <h1 class="text-3xl font-bold mb-6">Product Management</h1>
+
+  <!-- Add Product Form -->
+  <section class="mb-8 p-6 bg-white rounded shadow-md">
+    <h2 class="text-2xl font-semibold mb-4">Add New Product</h2>
+    <form id="add-product-form" enctype="multipart/form-data">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+          <input type="text" id="name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label for="category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <input type="text" id="category" name="category" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label for="price" class="block text-sm font-medium text-gray-700 mb-1">Price ($)</label>
+          <input type="number" id="price" name="price" step="0.01" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label for="productImage" class="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+          <input type="file" id="productImage" name="productImage" accept="image/*" required class="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+      <button type="submit" class="bg-indigo-600 text-white font-medium py-2 px-4 rounded-md hover:bg-indigo-700 transition duration-300">Add Product</button>
+    </form>
+    <div id="add-response-message" class="hidden"></div>
+  </section>
+
+  <!-- Product List -->
+  <section class="p-6 bg-white rounded shadow-md">
+    <h2 class="text-2xl font-semibold mb-4">Existing Products</h2>
+    <div id="product-list" class="space-y-4">
+      <!-- Products will be loaded here -->
+      <p>Loading products...</p>
+    </div>
+    <div id="delete-response-message" class="hidden"></div>
+  </section>
+
+  <script src="admin.js"></script>
+</body>
+</html>
