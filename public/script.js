@@ -19,6 +19,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const mpesaPhoneInput = document.getElementById("mpesa-phone");
   const mpesaResponseEl = document.getElementById("mpesa-response");
 
+  // Base URL for API endpoints
+  const API_BASE_URL = "https://novawear.onrender.com";
+
   // --- State ---
   let searchTimeout = null;
   let cart = []; // Simple in-memory cart
@@ -167,7 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
 
     try {
-      const response = await fetch(`/api/products?category=${encodeURIComponent(category)}`);
+      const response = await fetch(`${API_BASE_URL}/api/products?category=${encodeURIComponent(category)}`);
       if (!response.ok) throw new Error(`Failed to fetch ${category} products`);
       const products = await response.json();
       productsContainer.innerHTML = 
@@ -220,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">All Products</h2>` + 
       `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
     try {
-      const response = await fetch("/api/products");
+      const response = await fetch(`${API_BASE_URL}/api/products`);
       if (!response.ok) throw new Error("Failed to fetch products");
       const products = await response.json();
       productsContainer.innerHTML = 
@@ -289,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updatePageTitle(`Search Results for "${query}" - Nova Wear`);
 
     try {
-        const response = await fetch(`/api/products?search=${encodeURIComponent(query)}`);
+        const response = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}`);
         if (!response.ok) throw new Error("Search request failed");
         const products = await response.json();
         productsContainer.innerHTML = 
@@ -426,7 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showMpesaResponse("Initiating payment...", "info");
 
     try {
-      const response = await fetch("/api/mpesa/stkpush", {
+      const response = await fetch(`${API_BASE_URL}/api/mpesa/stkpush`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, amount }),
@@ -503,7 +506,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponseMessage(responseDiv, "", "");
 
     try {
-      const response = await fetch("/api/contact", {
+      const response = await fetch(`${API_BASE_URL}/api/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, message }),
@@ -536,7 +539,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponseMessage(responseDiv, "", "");
 
     try {
-      const response = await fetch("/api/subscribe", {
+      const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -584,4 +587,3 @@ document.addEventListener("DOMContentLoaded", () => {
   showHomePage();
   updateCartUI();
 });
-
