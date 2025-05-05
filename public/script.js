@@ -451,9 +451,9 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="mt-2 mb-3">
             <label class="block text-sm font-medium text-gray-700 mb-1">Size</label>
             <div class="flex space-x-2">
-              ${(product.sizes || VALID_SIZES).map(size => 
+              ${(product.sizes && product.sizes.length > 0 ? product.sizes : VALID_SIZES).map(size => 
                 `<button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="${size}">${size}</button>`
-              ).join('')}
+              ).join("")}
             </div>
           </div>
           <div class="flex justify-between items-center">
