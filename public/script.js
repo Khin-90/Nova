@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- State ---
   let searchTimeout = null;
   let cart = JSON.parse(localStorage.getItem('cart')) || [];
-  const DELIVERY_FEE = 300; // KES for locations outside Mombasa/Kilifi
+  const DELIVERY_FEE = 450; // KES for locations outside Mombasa/Kilifi
 
   // --- Initialize ---
   updateCartUI();
@@ -49,6 +49,24 @@ document.addEventListener("DOMContentLoaded", () => {
   deliveryLocationSelect?.addEventListener("change", updateDeliveryFee);
   contactForm?.addEventListener("submit", handleContactFormSubmit);
   newsletterForm?.addEventListener("submit", handleNewsletterSubmit);
+
+  // Add event delegation for category links and about links
+  document.addEventListener('click', (e) => {
+    // Handle category links
+    const categoryLink = e.target.closest('[data-category]');
+    if (categoryLink) {
+      e.preventDefault();
+      const category = categoryLink.getAttribute('data-category');
+      loadProductsByCategory(category);
+    }
+
+    // Handle about links
+    const aboutLink = e.target.closest('#about-link, #footer-about-link, #mobile-about-link');
+    if (aboutLink) {
+      e.preventDefault();
+      showAboutSection();
+    }
+  });
 
   // --- Navigation Functions ---
   function toggleSearch() {
@@ -102,6 +120,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function openCartFromHero(event) {
     event.preventDefault();
     openCart();
+  }
+
+  function showAboutSection() {
+    hideAllSections();
+    document.getElementById("about-section-content").classList.remove("hidden");
+    updatePageTitle("About Us - Nova Wear");
   }
 
   // --- Cart Functions ---
@@ -174,18 +198,18 @@ document.addEventListener("DOMContentLoaded", () => {
       cartItemsContainer.innerHTML = cart.map(item => `
         <div class="flex items-center py-4 border-b">
           <div class="w-16 h-16 flex-shrink-0 mr-4">
-            <img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover rounded">
+            <img src="${item.image}?${Date.now()}" alt="${item.name}" class="w-full h-full object-cover rounded">
           </div>
           <div class="flex-grow">
             <h4 class="font-medium">${item.name}</h4>
             <p class="text-sm text-gray-600">Size: ${item.size}</p>
             <div class="flex justify-between mt-1">
               <div class="flex items-center">
-                <button class="cart-qty-btn px-2 py-0.5 border rounded" 
-                        data-id="${item.id}" data-size="${item.size}" data-action="decrease">-</button>
+                <button class="cart-qty-btn decrease-btn px-2 py-0.5 border rounded" 
+                        data-id="${item.id}" data-size="${item.size}">-</button>
                 <span class="mx-2">${item.quantity}</span>
-                <button class="cart-qty-btn px-2 py-0.5 border rounded" 
-                        data-id="${item.id}" data-size="${item.size}" data-action="increase">+</button>
+                <button class="cart-qty-btn increase-btn px-2 py-0.5 border rounded" 
+                        data-id="${item.id}" data-size="${item.size}">+</button>
               </div>
               <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
             </div>
@@ -197,22 +221,26 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `).join("");
 
-      // Add event listeners to cart buttons
-      cartItemsContainer.querySelectorAll(".remove-from-cart").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const id = e.currentTarget.getAttribute("data-id");
-          const size = e.currentTarget.getAttribute("data-size");
-          removeFromCart(id, size);
-        });
-      });
+      // Add event delegation for cart buttons
+      cartItemsContainer.addEventListener('click', (e) => {
+        const target = e.target.closest('button');
+        if (!target) return;
 
-      cartItemsContainer.querySelectorAll(".cart-qty-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const id = e.currentTarget.getAttribute("data-id");
-          const size = e.currentTarget.getAttribute("data-size");
-          const action = e.currentTarget.getAttribute("data-action");
-          updateCartItemQuantity(id, size, action);
-        });
+        if (target.classList.contains('remove-from-cart')) {
+          const id = target.getAttribute('data-id');
+          const size = target.getAttribute('data-size');
+          removeFromCart(id, size);
+        } 
+        else if (target.classList.contains('decrease-btn')) {
+          const id = target.getAttribute('data-id');
+          const size = target.getAttribute('data-size');
+          updateCartItemQuantity(id, size, "decrease");
+        }
+        else if (target.classList.contains('increase-btn')) {
+          const id = target.getAttribute('data-id');
+          const size = target.getAttribute('data-size');
+          updateCartItemQuantity(id, size, "increase");
+        }
       });
     }
 
@@ -240,8 +268,21 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("contact")?.classList.remove("hidden");
     document.querySelector(".bg-gray-900")?.classList.remove("hidden");
     document.querySelector(".py-16.bg-gray-50")?.classList.remove("hidden");
-    loadAllProducts();
+    loadFeaturedProducts();
     updatePageTitle("Nova Wear - Contemporary Clothing");
+  }
+
+  async function loadFeaturedProducts() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/products?featured=true`);
+      if (!response.ok) throw new Error("Failed to fetch featured products");
+      const products = await response.json();
+      displayProducts(products);
+    } catch (error) {
+      console.error("Error loading featured products:", error);
+      productsContainer.innerHTML = 
+        '<p class="text-red-600 text-center col-span-full">Error loading featured products.</p>';
+    }
   }
 
   async function loadProductsByCategory(category) {
@@ -252,6 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
     productsContainer.innerHTML = 
       `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>` + 
       `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
+    updatePageTitle(`Shop ${categoryTitle} - Nova Wear`);
 
     try {
       const endpoint = category === "all" ? "/api/products" : 
@@ -262,30 +304,10 @@ document.addEventListener("DOMContentLoaded", () => {
       productsContainer.innerHTML = 
         `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>`;
       displayProducts(products);
-      updatePageTitle(`Shop ${categoryTitle} - Nova Wear`);
     } catch (error) {
       console.error(`Error loading ${category} products:`, error);
       productsContainer.innerHTML = 
         `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>` +
-        `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
-    }
-  }
-
-  async function loadAllProducts() {
-    productsContainer.innerHTML = 
-      `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` + 
-      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/products`);
-      if (!response.ok) throw new Error("Failed to fetch products");
-      const products = await response.json();
-      productsContainer.innerHTML = 
-        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>`;
-      displayProducts(products);
-    } catch (error) {
-      console.error("Error loading products:", error);
-      productsContainer.innerHTML = 
-        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` +
         `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
     }
   }
@@ -410,6 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
     const deliveryFee = deliveryLocationSelect.value === "other" ? DELIVERY_FEE : 0;
     const amount = subtotal + deliveryFee;
+    const location = deliveryLocationSelect.options[deliveryLocationSelect.selectedIndex].text;
 
     // Validation
     if (cart.length === 0) {
@@ -438,14 +461,33 @@ document.addEventListener("DOMContentLoaded", () => {
     showMpesaResponse("Initiating payment...", "info");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/mpesa/stkpush`, {
+      // First create the order
+      const orderResponse = await fetch(`${API_BASE_URL}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cart,
+          phone,
+          location,
+          subtotal,
+          deliveryFee,
+          total: amount
+        }),
+      });
+
+      if (!orderResponse.ok) {
+        throw new Error("Failed to create order");
+      }
+
+      // Then process payment
+      const paymentResponse = await fetch(`${API_BASE_URL}/api/mpesa/stkpush`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, amount }),
       });
-      const data = await response.json();
+      const data = await paymentResponse.json();
 
-      if (response.ok) {
+      if (paymentResponse.ok) {
         showMpesaResponse("Check your phone and enter your M-Pesa PIN.", "info");
         
         // Simulate successful payment
@@ -457,7 +499,7 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(data.msg || "Failed to initiate payment.");
       }
     } catch (error) {
-      console.error("M-Pesa Checkout Error:", error);
+      console.error("Checkout Error:", error);
       showMpesaResponse(`Error: ${error.message}`, "error");
     } finally {
       mpesaCheckoutBtn.disabled = false;

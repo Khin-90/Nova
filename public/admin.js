@@ -1,15 +1,63 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const API_BASE_URL = "https://novawear.onrender.com";
   const addProductForm = document.getElementById("add-product-form");
   const productListDiv = document.getElementById("product-list");
   const addResponseMessageDiv = document.getElementById("add-response-message");
   const deleteResponseMessageDiv = document.getElementById("delete-response-message");
+  const ordersListDiv = document.getElementById("orders-list");
+  const tabButtons = document.querySelectorAll(".tab-btn");
+  const tabContents = document.querySelectorAll(".tab-content");
+  const orderFilterButtons = document.querySelectorAll(".order-filter-btn");
 
-  // --- Fetch and Display Products ---
+  // Tab switching
+  tabButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      const tabId = button.getAttribute("data-tab");
+      
+      // Update active tab button
+      tabButtons.forEach(btn => {
+        btn.classList.remove("border-indigo-600", "text-indigo-600");
+        btn.classList.add("border-transparent", "text-gray-600");
+      });
+      button.classList.add("border-indigo-600", "text-indigo-600");
+      button.classList.remove("border-transparent", "text-gray-600");
+      
+      // Show active tab content
+      tabContents.forEach(content => content.classList.remove("active"));
+      document.getElementById(`${tabId}-tab`).classList.add("active");
+      
+      // Load data if needed
+      if (tabId === "orders") {
+        fetchOrders();
+      } else if (tabId === "products") {
+        fetchProducts();
+      }
+    });
+  });
+
+  // Order filter buttons
+  orderFilterButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      const status = button.getAttribute("data-status");
+      
+      // Update active filter button
+      orderFilterButtons.forEach(btn => {
+        btn.classList.remove("bg-indigo-600", "text-white");
+        btn.classList.add("bg-gray-200");
+      });
+      button.classList.add("bg-indigo-600", "text-white");
+      button.classList.remove("bg-gray-200");
+      
+      fetchOrders(status);
+    });
+  });
+
+  // --- Product Management ---
   async function fetchProducts() {
     try {
       productListDiv.innerHTML = '<div class="text-center py-4">Loading products...</div>';
       
-      const response = await fetch("https://novawear.onrender.com/api/products?nocache=" + Date.now());
+      const response = await fetch(`${API_BASE_URL}/api/products?nocache=${Date.now()}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -72,20 +120,119 @@ document.addEventListener("DOMContentLoaded", () => {
     
     productListDiv.appendChild(productsContainer);
 
-    // Helper function for tag display names
-    function formatTagName(tag) {
-      const names = {
-        'new': 'New',
-        'out-of-stock': 'Out of Stock',
-        'coming-soon': 'Coming Soon',
-        'sale': 'Sale'
-      };
-      return names[tag] || tag;
-    }
-
     // Add event listeners to delete buttons
     document.querySelectorAll(".delete-product-btn").forEach(button => {
       button.addEventListener("click", handleDeleteProduct);
+    });
+  }
+
+  // --- Order Management ---
+  async function fetchOrders(status = "all") {
+    try {
+      ordersListDiv.innerHTML = '<div class="text-center py-4">Loading orders...</div>';
+      
+      const endpoint = status === "all" ? "/api/orders" : `/api/orders?status=${status}`;
+      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const orders = await response.json();
+      displayOrders(orders);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      ordersListDiv.innerHTML = `
+        <div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          Error loading orders: ${error.message}
+        </div>`;
+    }
+  }
+
+  function displayOrders(orders) {
+    ordersListDiv.innerHTML = "";
+    
+    if (orders.length === 0) {
+      ordersListDiv.innerHTML = `
+        <div class="p-4 bg-blue-100 border border-blue-400 text-blue-700 rounded">
+          No orders found.
+        </div>`;
+      return;
+    }
+
+    const ordersContainer = document.createElement("div");
+    ordersContainer.className = "space-y-4";
+    
+    orders.forEach(order => {
+      const orderElement = document.createElement("div");
+      orderElement.className = `order-item p-4 border rounded-lg bg-white ${order.status === 'delivered' ? 'bg-green-50' : ''}`;
+      
+      const itemsHTML = order.items.map(item => `
+        <div class="flex items-center py-2 border-b">
+          <img src="${item.image}?${Date.now()}" alt="${item.name}" class="w-12 h-12 object-cover rounded mr-3">
+          <div class="flex-grow">
+            <h4 class="font-medium">${item.name}</h4>
+            <p class="text-sm text-gray-600">Size: ${item.size} | Qty: ${item.quantity}</p>
+          </div>
+          <span class="font-medium">KES ${(item.price * item.quantity).toFixed(2)}</span>
+        </div>
+      `).join('');
+      
+      orderElement.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <h3 class="font-bold">Order #${order.orderId}</h3>
+            <p class="text-sm text-gray-600">${new Date(order.createdAt).toLocaleString()}</p>
+          </div>
+          <span class="px-3 py-1 rounded-full text-sm font-medium 
+                ${order.status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+            ${order.status === 'delivered' ? 'Delivered' : 'Pending'}
+          </span>
+        </div>
+        
+        <div class="mb-4">
+          ${itemsHTML}
+        </div>
+        
+        <div class="flex justify-between items-center border-t pt-3">
+          <div>
+            <p class="font-medium">Customer: ${order.customerName}</p>
+            <p class="text-sm text-gray-600">${order.phone}</p>
+            <p class="text-sm">${order.location}</p>
+          </div>
+          <div class="text-right">
+            <p class="font-medium">Subtotal: KES ${order.subtotal.toFixed(2)}</p>
+            <p class="text-sm">Delivery: KES ${order.deliveryFee.toFixed(2)}</p>
+            <p class="font-bold">Total: KES ${order.total.toFixed(2)}</p>
+          </div>
+        </div>
+        
+        <div class="flex justify-end space-x-2 mt-3">
+          ${order.status !== 'delivered' ? `
+            <button data-id="${order._id}" 
+                    class="mark-delivered-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm transition-colors">
+              Mark Delivered
+            </button>
+          ` : ''}
+          <button data-id="${order._id}" 
+                  class="delete-order-btn bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm transition-colors">
+            Delete
+          </button>
+        </div>
+      `;
+      
+      ordersContainer.appendChild(orderElement);
+    });
+    
+    ordersListDiv.appendChild(ordersContainer);
+
+    // Add event listeners to order action buttons
+    document.querySelectorAll(".mark-delivered-btn").forEach(button => {
+      button.addEventListener("click", handleMarkDelivered);
+    });
+    
+    document.querySelectorAll(".delete-order-btn").forEach(button => {
+      button.addEventListener("click", handleDeleteOrder);
     });
   }
 
@@ -105,11 +252,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const originalButtonText = submitButton.textContent;
     
     submitButton.disabled = true;
-    submitButton.textContent = "Adding...";
-    submitButton.classList.add("opacity-75");
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Adding...';
 
     try {
-      const response = await fetch("https://novawear.onrender.com/api/products", {
+      const response = await fetch(`${API_BASE_URL}/api/products`, {
         method: "POST",
         body: formData,
       });
@@ -129,8 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showResponseMessage(addResponseMessageDiv, `Error: ${error.message}`, "error");
     } finally {
       submitButton.disabled = false;
-      submitButton.textContent = originalButtonText;
-      submitButton.classList.remove("opacity-75");
+      submitButton.innerHTML = originalButtonText;
     }
   });
 
@@ -146,11 +291,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const originalButtonText = button.textContent;
     button.disabled = true;
-    button.textContent = "Deleting...";
-    button.classList.add("opacity-75");
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Deleting...';
 
     try {
-      const response = await fetch(`https://novawear.onrender.com/api/products/${productId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
         method: "DELETE",
       });
 
@@ -167,15 +311,100 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error deleting product:", error);
       showResponseMessage(deleteResponseMessageDiv, `Error: ${error.message}`, "error");
       button.disabled = false;
-      button.textContent = originalButtonText;
-      button.classList.remove("opacity-75");
+      button.innerHTML = originalButtonText;
     }
   }
 
-  // --- Helper to show response messages ---
+  // --- Handle Mark Order as Delivered ---
+  async function handleMarkDelivered(event) {
+    const button = event.target;
+    const orderId = button.getAttribute("data-id");
+
+    if (!confirm("Mark this order as delivered?")) {
+      return;
+    }
+
+    const originalButtonText = button.textContent;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Updating...';
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/deliver`, {
+        method: "PATCH",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.msg || `HTTP error! status: ${response.status}`);
+      }
+
+      // Refresh orders list
+      const activeFilter = document.querySelector(".order-filter-btn.bg-indigo-600").getAttribute("data-status");
+      await fetchOrders(activeFilter);
+
+    } catch (error) {
+      console.error("Error marking order as delivered:", error);
+      alert(`Error: ${error.message}`);
+      button.disabled = false;
+      button.innerHTML = originalButtonText;
+    }
+  }
+
+  // --- Handle Delete Order ---
+  async function handleDeleteOrder(event) {
+    const button = event.target;
+    const orderId = button.getAttribute("data-id");
+
+    // Check if order is delivered
+    const orderElement = button.closest(".order-item");
+    const isDelivered = orderElement.querySelector(".bg-green-100") !== null;
+
+    if (!isDelivered && !confirm("This order is not yet delivered. Are you sure you want to delete it?")) {
+      return;
+    }
+
+    const originalButtonText = button.textContent;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Deleting...';
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.msg || `HTTP error! status: ${response.status}`);
+      }
+
+      // Refresh orders list
+      const activeFilter = document.querySelector(".order-filter-btn.bg-indigo-600").getAttribute("data-status");
+      await fetchOrders(activeFilter);
+
+    } catch (error) {
+      console.error("Error deleting order:", error);
+      alert(`Error: ${error.message}`);
+      button.disabled = false;
+      button.innerHTML = originalButtonText;
+    }
+  }
+
+  // --- Helper Functions ---
+  function formatTagName(tag) {
+    const names = {
+      'new': 'New',
+      'out-of-stock': 'Out of Stock',
+      'coming-soon': 'Coming Soon',
+      'sale': 'Sale'
+    };
+    return names[tag] || tag;
+  }
+
   function showResponseMessage(element, message, type) {
     element.textContent = message;
-    element.className = `p-3 rounded-md mb-4 ${type === "success" 
+    element.className = `p-3 rounded-md ${type === "success" 
       ? "bg-green-100 border border-green-400 text-green-700" 
       : "bg-red-100 border border-red-400 text-red-700"}`;
     element.classList.remove("hidden");
