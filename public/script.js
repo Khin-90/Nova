@@ -81,11 +81,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const size = target.getAttribute("data-size");
     console.log(`Cart action triggered for ID: ${id}, Size: ${size}`);
 
-    // *** FIX: Validate ID and Size before proceeding ***
+    // Validate ID and Size before proceeding
     if (!id || !size || !VALID_SIZES.includes(size)) {
         console.error(`Invalid ID ('${id}') or Size ('${size}') for cart action. Action aborted.`);
-        // Consider adding a user-facing message here if this happens often
-        // alert("Could not modify item. Please try removing and re-adding it.");
         return; // Stop processing if ID or Size is invalid
     }
 
@@ -165,11 +163,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Cart Functions ---
   function addToCart(product, size) {
-    console.log("Adding to cart:", product, size);
+    console.log("addToCart received product:", product); // Log received product
     // Ensure size is valid before adding
     if (!VALID_SIZES.includes(size)) {
         console.error(`Attempted to add product with invalid size: ${size}. Aborting.`);
         alert(`Invalid size selected: ${size}. Please select a valid size.`);
+        return;
+    }
+    // *** FIX: Ensure product.id exists before proceeding ***
+    if (!product || !product.id) {
+        console.error("Attempted to add product without a valid ID:", product);
+        alert("Cannot add this item to the cart. Product ID is missing.");
         return;
     }
 
@@ -181,12 +185,21 @@ document.addEventListener("DOMContentLoaded", () => {
       existingItem.quantity += 1;
       console.log("Increased quantity for existing item");
     } else {
-      cart.push({
-        ...product,
-        size, // Size is now guaranteed to be valid
+      // Create a clean item object for the cart
+      const cartItem = {
+        id: product.id, // Use the validated ID
+        name: product.name,
+        price: product.price,
+        image: product.image, // Keep original relative path for consistency
+        size: size, // Use the validated size
         quantity: 1,
-      });
-      console.log("Added new item to cart");
+        // Optionally include other needed fields like category, tags, etc.
+        category: product.category,
+        tags: product.tags,
+        sizes: product.sizes
+      };
+      cart.push(cartItem);
+      console.log("Added new item to cart:", cartItem);
     }
 
     saveCart();
@@ -195,7 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function removeFromCart(productId, size) {
-    // Size is validated by the event listener, no need to re-validate here
+    // Size is validated by the event listener
     console.log(`Removing item from cart: ID=${productId}, Size=${size}`);
     const initialLength = cart.length;
     cart = cart.filter(
@@ -206,7 +219,6 @@ document.addEventListener("DOMContentLoaded", () => {
       saveCart();
       updateCartUI();
     } else {
-      // This should ideally not happen now due to validation
       console.error("Failed to find item to remove. Cart state:", cart);
     }
   }
@@ -219,7 +231,6 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
     if (!item) {
-      // This should ideally not happen now
       console.error("Item not found for quantity update. Cart state:", cart);
       return;
     }
@@ -243,13 +254,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function saveCart() {
     console.log("Saving cart to localStorage:", cart);
-    // Filter out any potentially invalid items before saving (belt and braces)
-    const validCart = cart.filter(item => item.id && item.size && VALID_SIZES.includes(item.size) && item.quantity > 0);
-    if (validCart.length !== cart.length) {
-        console.warn("Invalid items detected in cart before saving. They have been removed.", cart.filter(item => !validCart.includes(item)));
-        cart = validCart; // Update the main cart variable
-    }
-    localStorage.setItem("cart", JSON.stringify(cart));
+    // Ensure cart is an array before stringifying
+    const cartToSave = Array.isArray(cart) ? cart : [];
+    localStorage.setItem("cart", JSON.stringify(cartToSave));
   }
 
   function clearCart() {
@@ -262,7 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateCartUI() {
     console.log("Updating Cart UI...");
     // Update cart count
-    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const totalItems = cart.reduce((sum, item) => sum + (item.quantity || 0), 0); // Ensure quantity exists
     if (cartCount) cartCount.textContent = totalItems;
 
     // Update cart items
@@ -278,12 +285,19 @@ document.addEventListener("DOMContentLoaded", () => {
       cartItemsContainer.innerHTML = cart
         .map(
           (item) => {
-            // Ensure item has valid properties before rendering
-            if (!item || !item.id || !item.size || !VALID_SIZES.includes(item.size) || !item.quantity) {
-                console.warn("Skipping rendering of invalid cart item:", item);
+            // *** FIX: Check for valid ID more specifically ***
+            let reason = "";
+            if (!item) reason = "Item is null/undefined";
+            else if (!item.id) reason = "Missing ID";
+            else if (!item.size || !VALID_SIZES.includes(item.size)) reason = `Invalid Size ('${item.size}')`;
+            else if (!item.quantity || item.quantity <= 0) reason = `Invalid Quantity ('${item.quantity}')`;
+            
+            if (reason) {
+                console.warn(`Skipping rendering cart item: ${reason}. Item data:`, item);
                 return ''; // Don't render this item
             }
 
+            // Item is considered valid for rendering here
             const imageUrl = item.image && item.image.startsWith("http") ? item.image : `${API_BASE_URL}${item.image || ''}`;
             return `
               <div class="flex items-center py-4 border-b">
@@ -301,7 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
                       <button class="cart-qty-btn increase-btn px-2 py-0.5 border rounded" 
                               data-id="${item.id}" data-size="${item.size}">+</button>
                     </div>
-                    <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
+                    <span>KES ${((item.price || 0) * item.quantity).toFixed(2)}</span>
                   </div>
                 </div>
                 <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" 
@@ -322,7 +336,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateDeliveryFee() {
     const subtotal = cart.reduce(
-      (sum, item) => sum + item.price * item.quantity,
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0
     );
     const location = deliveryLocationSelect?.value || "mombasa-kilifi"; // Default if select not found
@@ -408,6 +422,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     products.forEach((product) => {
+      // *** FIX: Ensure product has an ID before rendering card ***
+      if (!product || !product.id) {
+          console.warn("Skipping display of product with missing ID:", product);
+          return; // Don't render card if product ID is missing
+      }
+
       const productCard = document.createElement("div");
       productCard.className =
         "product-card bg-white rounded-lg overflow-hidden shadow hover:shadow-md transition-shadow duration-300";
@@ -438,7 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="flex justify-between items-center">
             <span class="text-gray-900 font-bold">KES ${(product.price || 0).toFixed(2)}</span>
-            <button class="add-to-cart bg-black text-white px-3 py-1 rounded-md text-sm hover:bg-gray-800" data-product-id="${product._id}">
+            <button class="add-to-cart bg-black text-white px-3 py-1 rounded-md text-sm hover:bg-gray-800" data-product-id="${product.id}">
               Add to Cart
             </button>
           </div>
@@ -448,7 +468,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const sizeOptions = productCard.querySelectorAll(".size-option");
       if (sizeOptions.length > 0) {
-        // Default to M if available, otherwise the first option
         const defaultSizeBtn = productCard.querySelector('.size-option[data-size="M"]') || sizeOptions[0];
         defaultSizeBtn.classList.add("bg-black", "text-white");
       }
@@ -456,7 +475,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const addToCartBtn = productCard.querySelector(".add-to-cart");
       addToCartBtn.addEventListener("click", () => {
         const selectedSizeBtn = productCard.querySelector(".size-option.bg-black");
-        // Use default size from button if selection somehow failed
         const selectedSize = selectedSizeBtn ? selectedSizeBtn.getAttribute("data-size") : (productCard.querySelector('.size-option[data-size="M"]') || sizeOptions[0])?.getAttribute("data-size"); 
         
         if (!selectedSize) {
@@ -465,12 +483,10 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const productDataForCart = { 
-          ...product, 
-          id: product._id, 
-          image: product.image // Pass the original relative path to cart
-        };
-        addToCart(productDataForCart, selectedSize);
+        // *** FIX: Pass the correct product object with 'id' property ***
+        // The 'product' object here already has 'id' thanks to the Mongoose virtual
+        console.log("Product data being passed to addToCart:", product);
+        addToCart(product, selectedSize);
       });
 
       sizeOptions.forEach((option) => {
@@ -539,7 +555,6 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponse(responseDiv, "", ""); // Clear previous message
 
     try {
-      // Simulate API call
       const response = await fetch(`${API_BASE_URL}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -573,7 +588,6 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponse(responseDiv, "", ""); // Clear previous message
 
     try {
-      // Simulate API call
        const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -635,7 +649,6 @@ document.addEventListener("DOMContentLoaded", () => {
         "STK Push sent! Please check your phone to complete the payment.",
         "success"
       );
-      // Assume payment might succeed, create order optimistically
       await createOrderAfterPaymentAttempt(phone, amount);
 
     } catch (error) {
@@ -647,35 +660,33 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Renamed function for clarity
   async function createOrderAfterPaymentAttempt(phone, amount) {
     const location = deliveryLocationSelect?.value || "mombasa-kilifi";
     const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const subtotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
     const total = subtotal + deliveryFee;
 
     const orderData = {
       items: cart.map(item => ({ 
         productId: item.id, 
-        name: item.name, 
+        name: item.name,
         size: item.size, 
         quantity: item.quantity, 
         price: item.price,
         image: item.image // Include original relative image URL in order data
       })),
-      customerName: "Online Customer", // Placeholder - Consider adding a name field
+      customerName: "Online Customer", // Placeholder
       phone: phone,
       location: location,
       subtotal: subtotal,
       deliveryFee: deliveryFee,
       total: total,
       paymentMethod: "M-Pesa",
-      status: "pending" // Status will remain pending until payment confirmed (requires webhook)
+      status: "pending" 
     };
 
     try {
-      // Need an endpoint to create orders
-      const response = await fetch(`${API_BASE_URL}/api/orders`, { // Assuming /api/orders exists
+      const response = await fetch(`${API_BASE_URL}/api/orders`, { 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -687,14 +698,12 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(result.msg || "Failed to create order");
       }
       console.log("Order created successfully (pending payment confirmation):", result.orderId);
-      // Clear cart only after order is successfully created
       clearCart(); 
       showMpesaResponse("Payment initiated and order placed (pending confirmation). Thank you!", "success", true);
-      setTimeout(closeCart, 3000); // Close cart after success message
+      setTimeout(closeCart, 3000); 
 
     } catch (error) {
       console.error("Error creating order:", error);
-      // Don't clear cart if order creation fails
       showMpesaResponse(`Payment initiated, but failed to save order: ${error.message}. Please contact support.`, "error", true);
     }
   }
@@ -737,7 +746,6 @@ document.addEventListener("DOMContentLoaded", () => {
       : "bg-red-100 text-red-800"}`;
     element.classList.remove("hidden");
 
-    // Auto-hide after 5 seconds
     setTimeout(() => {
       element.classList.add("hidden");
     }, 5000);
@@ -762,7 +770,6 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>
       `;
-      // Insert after header or at the beginning of body
       const header = document.querySelector('header');
       if (header) {
         header.insertAdjacentElement('afterend', displaySection);
@@ -770,7 +777,6 @@ document.addEventListener("DOMContentLoaded", () => {
         mainContentArea.insertBefore(displaySection, mainContentArea.firstChild);
       }
     }
-    // Check if featured products container exists
     if (!document.getElementById('featured-products')) {
         console.warn('Featured products container (#featured-products) not found in HTML.');
     }
