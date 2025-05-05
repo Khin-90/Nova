@@ -11,13 +11,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeCartBtn = document.getElementById("close-cart");
   const contactForm = document.getElementById("contact-form");
   const newsletterForm = document.getElementById("newsletter-form");
-  const productsContainer = document.getElementById("featured-products"); // Main product display area
-  const mainContentArea = document.querySelector("body > section:not(#contact):not(.bg-gray-900)"); // Heuristic to find main content area
-  const heroSection = document.querySelector(".relative.bg-black.text-white"); // Hero section
+  const productsContainer = document.getElementById("featured-products");
+  const mainContentArea = document.querySelector("body > section:not(#contact):not(.bg-gray-900)");
+  const heroSection = document.querySelector(".relative.bg-black.text-white");
   const heroShopNowBtn = document.getElementById("hero-shop-now-btn");
   const mpesaCheckoutBtn = document.getElementById("mpesa-checkout-btn");
   const mpesaPhoneInput = document.getElementById("mpesa-phone");
   const mpesaResponseEl = document.getElementById("mpesa-response");
+  const aboutLink = document.getElementById("about-link");
+  const mobileAboutLink = document.getElementById("mobile-about-link");
+  const footerAboutLink = document.getElementById("footer-about-link");
+  const deliveryLocationSelect = document.getElementById("delivery-location");
+  const deliveryFeeEl = document.getElementById("delivery-fee");
+  const cartTotalEl = document.getElementById("cart-total");
 
   // Base URL for API endpoints
   const API_BASE_URL = "https://novawear.onrender.com";
@@ -25,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- State ---
   let searchTimeout = null;
   let cart = []; // Simple in-memory cart
+  const DELIVERY_FEE = 300; // KES for locations outside Mombasa/Kilifi
 
   // --- Event Listeners ---
 
@@ -106,37 +113,39 @@ document.addEventListener("DOMContentLoaded", () => {
   // M-Pesa Checkout Button
   mpesaCheckoutBtn?.addEventListener("click", handleMpesaCheckout);
 
+  // About page links
+  [aboutLink, mobileAboutLink, footerAboutLink].forEach(link => {
+    link?.addEventListener("click", (e) => {
+      e.preventDefault();
+      showAboutPage();
+    });
+  });
+
+  // Delivery location change
+  deliveryLocationSelect?.addEventListener("change", updateDeliveryFee);
+
   // --- Navigation Handling ---
   function handleNavigation(event) {
-    const link = event.target.closest("a[href^=\"/\"], a[href^=\"#\"]");
+    const link = event.target.closest("a[href^=\"/\"], a[href^=\"#\"], a[data-category]");
     if (!link) return;
 
     const href = link.getAttribute("href");
+    const category = link.getAttribute("data-category");
 
-    if (link.closest(".group-hover\:block") || link.closest("#mobile-categories")) {
-        if (href.startsWith("/shop/")) {
-            event.preventDefault();
-            const category = href.split("/shop/")[1];
-            loadProductsByCategory(category);
-            mobileMenu?.classList.add("hidden");
-            return;
-        }
+    if (category) {
+      event.preventDefault();
+      loadProductsByCategory(category);
+      mobileMenu?.classList.add("hidden");
+      return;
     }
     
     if (href === "/" || href === "/shop" || href === "/collections" || href === "/shop/all" || href === "/shop/new") {
       event.preventDefault();
       showHomePage();
-    } else if (href.startsWith("/shop/") && !link.closest(".group-hover\:block") && !link.closest("#mobile-categories")) {
-      event.preventDefault();
-      const category = href.split("/shop/")[1];
-      loadProductsByCategory(category);
-    } else if (href === "/about") {
-      event.preventDefault();
-      showAboutPage();
     } else if (href === "#contact") {
-      return;
+      return; // Allow default behavior for contact link
     } else if (href === "#") {
-        event.preventDefault();
+      event.preventDefault();
     }
     
     mobileMenu?.classList.add("hidden");
@@ -145,6 +154,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelector("header nav")?.addEventListener("click", handleNavigation);
   document.getElementById("mobile-menu")?.addEventListener("click", handleNavigation);
   document.querySelector("header a[href=\"/\"]")?.addEventListener("click", handleNavigation);
+  document.querySelectorAll("a[data-category]").forEach(link => {
+    link.addEventListener("click", handleNavigation);
+  });
 
   // --- Content Loading Functions ---
 
@@ -164,13 +176,16 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log(`Loading category: ${category}`);
     hideAllSections();
     productsContainer?.parentElement.classList.remove("hidden");
-    const categoryTitle = category.charAt(0).toUpperCase() + category.slice(1);
+    const categoryTitle = category === "all" ? "All Products" : 
+                         category.charAt(0).toUpperCase() + category.slice(1);
     productsContainer.innerHTML = 
       `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>` + 
       `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products?category=${encodeURIComponent(category)}`);
+      const endpoint = category === "all" ? "/api/products" : 
+                     `/api/products?category=${encodeURIComponent(category)}`;
+      const response = await fetch(`${API_BASE_URL}${endpoint}`);
       if (!response.ok) throw new Error(`Failed to fetch ${category} products`);
       const products = await response.json();
       productsContainer.innerHTML = 
@@ -188,18 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function showAboutPage() {
     console.log("Navigating to About");
     hideAllSections();
-    let aboutSection = document.getElementById("about-section-content");
-    if (!aboutSection) {
-        aboutSection = document.createElement("section");
-        aboutSection.id = "about-section-content";
-        aboutSection.className = "py-16 bg-white";
-        document.querySelector("header").insertAdjacentElement("afterend", aboutSection);
-    }
-    aboutSection.innerHTML = `
-      <div class="container mx-auto px-4">
-        <h2 class="text-3xl font-bold mb-6 text-center">About Nova Wear</h2>
-        <p class="text-lg text-gray-700 text-center max-w-3xl mx-auto">Nova Wear is dedicated to providing contemporary clothing for modern lifestyles. We believe in quality, style, and sustainability. (Placeholder content).</p>
-      </div>`;
+    const aboutSection = document.getElementById("about-section-content");
     aboutSection.classList.remove("hidden");
     updatePageTitle("About Us - Nova Wear");
   }
@@ -220,20 +224,20 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadAllProducts() {
     console.log("Loading all products for home page");
     productsContainer.innerHTML = 
-      `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">All Products</h2>` + 
+      `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` + 
       `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
     try {
       const response = await fetch(`${API_BASE_URL}/api/products`);
       if (!response.ok) throw new Error("Failed to fetch products");
       const products = await response.json();
       productsContainer.innerHTML = 
-        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">All Products</h2>`;
+        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>`;
       displayProducts(products);
     } catch (error) {
       console.error("Error loading products:", error);
       if (productsContainer) {
         productsContainer.innerHTML = 
-          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">All Products</h2>` +
+          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` +
           `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
       }
     }
@@ -265,7 +269,16 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div class="p-4">
           <h3 class="font-medium text-lg">${product.name}</h3>
-          <div class="flex justify-between items-center mt-2">
+          <div class="mt-2 mb-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Size</label>
+            <div class="flex space-x-2">
+              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="S">S</button>
+              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="M">M</button>
+              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="L">L</button>
+              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="XL">XL</button>
+            </div>
+          </div>
+          <div class="flex justify-between items-center">
             <span class="text-gray-900 font-bold">KES ${product.price.toFixed(2)}</span>
             <button class="add-to-cart bg-black text-white px-3 py-1 rounded-md text-sm hover:bg-gray-800" data-id="${product._id}">
               Add to Cart
@@ -274,9 +287,30 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
       productsContainer.appendChild(productCard);
+      
+      // Set default selected size
+      const sizeOptions = productCard.querySelectorAll(".size-option");
+      if (sizeOptions.length > 0) {
+        sizeOptions[1].classList.add("bg-black", "text-white"); // Default to M
+      }
+
       const addToCartBtn = productCard.querySelector(".add-to-cart");
       addToCartBtn.addEventListener("click", () => {
-        addToCart({ ...product, id: product._id }); 
+        const selectedSize = productCard.querySelector(".size-option.bg-black")?.getAttribute("data-size") || "M";
+        addToCart({ 
+          ...product, 
+          id: product._id,
+          size: selectedSize
+        }); 
+      });
+
+      // Size selection
+      sizeOptions.forEach(option => {
+        option.addEventListener("click", (e) => {
+          e.preventDefault();
+          sizeOptions.forEach(opt => opt.classList.remove("bg-black", "text-white"));
+          option.classList.add("bg-black", "text-white");
+        });
       });
     });
   }
@@ -309,7 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Cart Functionality ---
 
   function addToCart(product) {
-    const existingItem = cart.find(item => item.id === product.id);
+    const existingItem = cart.find(item => item.id === product.id && item.size === product.size);
     if (existingItem) {
       existingItem.quantity += 1;
     } else {
@@ -338,16 +372,17 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="flex-grow">
             <h4 class="font-medium">${item.name}</h4>
+            <p class="text-sm text-gray-600">Size: ${item.size}</p>
             <div class="flex justify-between mt-1">
               <div class="flex items-center">
-                <button class="cart-qty-btn text-sm px-2 py-0.5 border rounded" data-id="${item.id}" data-action="decrease">-</button>
+                <button class="cart-qty-btn text-sm px-2 py-0.5 border rounded" data-id="${item.id}" data-size="${item.size}" data-action="decrease">-</button>
                 <span class="mx-2">${item.quantity}</span>
-                <button class="cart-qty-btn text-sm px-2 py-0.5 border rounded" data-id="${item.id}" data-action="increase">+</button>
+                <button class="cart-qty-btn text-sm px-2 py-0.5 border rounded" data-id="${item.id}" data-size="${item.size}" data-action="increase">+</button>
               </div>
               <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
             </div>
           </div>
-          <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" data-id="${item.id}">
+          <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" data-id="${item.id}" data-size="${item.size}">
             <i class="fas fa-trash"></i>
           </button>
         </div>
@@ -355,43 +390,56 @@ document.addEventListener("DOMContentLoaded", () => {
 
       cartItemsContainer.querySelectorAll(".remove-from-cart").forEach(button => {
         button.addEventListener("click", () => {
-          const productId = button.getAttribute("data-id"); 
-          removeFromCart(productId);
+          const productId = button.getAttribute("data-id");
+          const size = button.getAttribute("data-size");
+          removeFromCart(productId, size);
         });
       });
 
       cartItemsContainer.querySelectorAll(".cart-qty-btn").forEach(button => {
         button.addEventListener("click", () => {
           const productId = button.getAttribute("data-id");
+          const size = button.getAttribute("data-size");
           const action = button.getAttribute("data-action");
-          updateCartItemQuantity(productId, action);
+          updateCartItemQuantity(productId, size, action);
         });
       });
     }
 
-    const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
-    cartSubtotal.textContent = `KES ${subtotal.toFixed(2)}`;
+    updateDeliveryFee();
   }
 
-  function removeFromCart(productId) {
-    cart = cart.filter(item => item.id !== productId);
+  function removeFromCart(productId, size) {
+    cart = cart.filter(item => !(item.id === productId && item.size === size));
     updateCartUI();
   }
 
-  function updateCartItemQuantity(productId, action) {
-    const item = cart.find(item => item.id === productId);
+  function updateCartItemQuantity(productId, size, action) {
+    const item = cart.find(item => item.id === productId && item.size === size);
     if (item) {
       if (action === "increase") {
         item.quantity += 1;
       } else if (action === "decrease") {
         item.quantity -= 1;
         if (item.quantity <= 0) {
-          removeFromCart(productId);
+          removeFromCart(productId, size);
           return;
         }
       }
       updateCartUI();
     }
+  }
+
+  function updateDeliveryFee() {
+    if (!deliveryLocationSelect || !deliveryFeeEl || !cartSubtotal || !cartTotalEl) return;
+    
+    const location = deliveryLocationSelect.value;
+    const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
+    
+    deliveryFeeEl.textContent = `KES ${deliveryFee.toFixed(2)}`;
+    document.getElementById("cart-subtotal").textContent = `KES ${subtotal.toFixed(2)}`;
+    cartTotalEl.textContent = `KES ${(subtotal + deliveryFee).toFixed(2)}`;
   }
 
   function clearCart() {
@@ -402,7 +450,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- M-Pesa Checkout Handler ---
   async function handleMpesaCheckout() {
     const phone = mpesaPhoneInput.value.trim();
-    const amount = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    const deliveryFee = deliveryLocationSelect.value === "other" ? DELIVERY_FEE : 0;
+    const amount = subtotal + deliveryFee;
 
     // Basic validation
     if (cart.length === 0) {
@@ -441,17 +491,11 @@ document.addEventListener("DOMContentLoaded", () => {
         showMpesaResponse("Check your phone and enter your M-Pesa PIN.", "info");
         
         // --- SIMULATED SUCCESS --- 
-        // In a real app, wait for backend confirmation via WebSocket or polling
         console.log("Simulating payment success after 15 seconds...");
         setTimeout(() => {
             console.log("Simulated success received!");
             showMpesaResponse("Payment Successful! Thank you.", "success");
             clearCart(); // Clear the cart on simulated success
-            // Optionally close the cart sidebar after a further delay
-            // setTimeout(() => {
-            //     cartSidebar.classList.remove("cart-open");
-            //     cartSidebar.classList.add("cart-closed");
-            // }, 3000);
         }, 15000); // Simulate after 15 seconds
         // --- END SIMULATED SUCCESS ---
 
@@ -464,7 +508,6 @@ document.addEventListener("DOMContentLoaded", () => {
       showMpesaResponse(`Error: ${error.message}`, "error");
     } finally {
       // Re-enable button after simulation starts or on error
-      // In a real app, you might keep it disabled until payment status is confirmed
       mpesaCheckoutBtn.disabled = false;
       mpesaCheckoutBtn.innerHTML = 
         `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1280px-M-PESA_LOGO-01.svg.png" alt="M-Pesa Logo" class="h-5 mr-2"> Pay with M-Pesa`;
