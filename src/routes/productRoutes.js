@@ -1,37 +1,37 @@
 const express = require("express");
-const multer = require("multer");
-const path = require("path");
-const Product = require("../models/Product");
-
 const router = express.Router();
+const Product = require("../models/Product");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2; // Import v2
+const { CloudinaryStorage } = require("multer-storage-cloudinary"); // Import CloudinaryStorage
 
-// --- Multer Configuration for Image Uploads ---
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    // Ensure the directory exists (it should, from the previous step)
-    cb(null, path.join(__dirname, "../../public/uploads/products"));
-  },
-  filename: function (req, file, cb) {
-    // Create a unique filename: fieldname-timestamp.extension
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
-  }
+// Configure Cloudinary (reads from environment variables automatically if set on Render)
+// Ensure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET are set in Render Env Vars
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// File filter to accept only images
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image/")) {
-    cb(null, true);
-  } else {
-    cb(new Error("Not an image! Please upload only images."), false);
-  }
-};
+// Configure Multer to use Cloudinary storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "novawear_products", // Optional: folder name in Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "gif"], // Specify allowed image formats
+    // transformation: [{ width: 500, height: 500, crop: "limit" }] // Optional: transformations
+  },
+});
 
-const upload = multer({ storage: storage, fileFilter: fileFilter, limits: { fileSize: 1024 * 1024 * 5 } }); // Limit file size to 5MB
+// Initialize Multer with Cloudinary storage
+const upload = multer({ 
+  storage: storage, 
+  limits: { fileSize: 1024 * 1024 * 5 } // Limit file size to 5MB (optional)
+}); 
 
 // --- Product API Routes ---
 
-// @route   GET /api/products/featured-products (Existing - renamed for clarity)
+// @route   GET /api/products/featured
 // @desc    Get featured products (limit to 4 for the homepage)
 // @access  Public
 router.get("/products/featured", async (req, res) => {
@@ -45,30 +45,38 @@ router.get("/products/featured", async (req, res) => {
 });
 
 // @route   POST /api/products
-// @desc    Create a new product
+// @desc    Create a new product with image upload to Cloudinary
 // @access  Private (should be protected in a real app)
 router.post("/products", upload.single("productImage"), async (req, res) => {
-  const { name, category, price } = req.body;
-
-  // Check if file was uploaded
-  if (!req.file) {
-    return res.status(400).json({ msg: "Product image is required." });
-  }
-
-  // Construct the image URL path (relative to the public folder)
-  const imageUrl = `/uploads/products/${req.file.filename}`;
-
   try {
-    // Basic validation
+    // Check if file was uploaded by Multer/Cloudinary
+    if (!req.file) {
+      return res.status(400).json({ msg: "Product image is required." });
+    }
+
+    const { name, description, price, category, sizes, tags } = req.body;
+
+    // Basic validation for required text fields
     if (!name || !category || !price) {
+      // If upload succeeded but text fields missing, consider deleting uploaded image from Cloudinary
+      // await cloudinary.uploader.destroy(req.file.filename); // filename might be public_id depending on config
       return res.status(400).json({ msg: "Please fill in all required fields (name, category, price)." });
     }
 
+    // Convert sizes/tags from string if they are sent as comma-separated strings
+    // Adjust this based on how your admin form sends the data
+    const parsedSizes = typeof sizes === 'string' ? sizes.split(',').map(s => s.trim()).filter(s => s) : (Array.isArray(sizes) ? sizes : []);
+    const parsedTags = typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(t => t) : (Array.isArray(tags) ? tags : []);
+
     const newProduct = new Product({
       name,
+      description: description || '', // Add description field
       category,
       price: parseFloat(price), // Ensure price is a number
-      image: imageUrl, // Save the path to the image
+      sizes: parsedSizes, // Add sizes field
+      tags: parsedTags,   // Add tags field
+      image: req.file.path, // Cloudinary provides the full secure URL in req.file.path
+      imagePublicId: req.file.filename // Store the public_id (often in filename) if you need to delete later
     });
 
     const product = await newProduct.save();
@@ -76,7 +84,17 @@ router.post("/products", upload.single("productImage"), async (req, res) => {
 
   } catch (err) {
     console.error("Error creating product:", err.message);
-    // Handle validation errors
+    // If error occurred after upload, attempt to delete from Cloudinary
+    if (req.file && req.file.filename) {
+        try {
+            await cloudinary.uploader.destroy(req.file.filename);
+            console.log("Cleaned up uploaded image from Cloudinary due to error.");
+        } catch (cleanupErr) {
+            console.error("Error cleaning up Cloudinary image:", cleanupErr);
+        }
+    }
+    
+    // Handle specific errors
     if (err.name === 'ValidationError') {
         let errors = {};
         Object.keys(err.errors).forEach((key) => {
@@ -85,57 +103,48 @@ router.post("/products", upload.single("productImage"), async (req, res) => {
         const firstError = Object.values(errors)[0];
         return res.status(400).json({ msg: firstError || "Validation failed. Please check your input." });
     }
-    // Handle Multer errors (e.g., file size limit)
     if (err instanceof multer.MulterError) {
         return res.status(400).json({ msg: `File upload error: ${err.message}` });
     }
-    // Handle custom file filter error
-    if (err.message === "Not an image! Please upload only images.") {
-        return res.status(400).json({ msg: err.message });
+    // Handle Cloudinary errors (might need more specific checks based on Cloudinary SDK errors)
+    if (err.message.includes("Cloudinary")) {
+        return res.status(500).json({ msg: `Image upload failed: ${err.message}` });
     }
     res.status(500).json({ msg: "Server Error: Could not create product." });
   }
 });
 
-// TODO: Add routes for GET /products, GET /products/:id, PUT /products/:id, DELETE /products/:id
-
-module.exports = router;
-
-
-
 // @route   GET /api/products
 // @desc    Get all products, optionally filtered by category or search term
 // @access  Public
 router.get("/products", async (req, res) => {
-  const { category, search } = req.query; // Get category and search term
+  const { category, search } = req.query; 
   let query = {};
 
-  // Handle category filtering
-  if (category && category !== 'all' && category !== 'new') {
-    query.category = { $regex: new RegExp(`^${category}$`, 'i') };
-  }
-
-  // Handle search term filtering (searches name and category)
-  if (search) {
-    const searchRegex = { $regex: search, $options: 'i' }; // Case-insensitive search
-    // If category is already specified, add search to it using $and
-    if (query.category) {
-        query = {
-            $and: [
-                { category: query.category },
-                { $or: [{ name: searchRegex }, { category: searchRegex }] } // Search name OR category
-            ]
-        };
+  if (category && category !== 'all') {
+    // Assuming tags might include 'new', 'sale' etc. which are not categories
+    // If 'new', 'sale' etc. are categories in your model, adjust this logic
+    const validCategories = ['Hoodie', 'Tshirt', 'Shorts']; // Example: Define actual categories
+    if (validCategories.includes(category)) {
+        query.category = { $regex: new RegExp(`^${category}$`, 'i') };
     } else {
-        // Otherwise, search name OR category
-        query.$or = [{ name: searchRegex }, { category: searchRegex }];
+        // Handle tags like 'new', 'sale' if needed, e.g., query.tags = category;
     }
   }
 
-  // Note: 'new' arrivals might need different logic, e.g., sorting by creation date
+  if (search) {
+    const searchRegex = { $regex: search, $options: 'i' }; 
+    const searchConditions = { $or: [{ name: searchRegex }, { category: searchRegex }, { description: searchRegex }] }; // Search name, category, description
+    
+    if (Object.keys(query).length > 0) { // If category filter exists
+        query = { $and: [query, searchConditions] };
+    } else {
+        query = searchConditions;
+    }
+  }
 
   try {
-    const products = await Product.find(query).sort({ name: 1 }); // Apply combined query filter
+    const products = await Product.find(query).sort({ createdAt: -1 }); // Sort by newest first
     res.json(products);
   } catch (err) {
     console.error("Error fetching products:", err.message);
@@ -145,7 +154,7 @@ router.get("/products", async (req, res) => {
 
 // @route   GET /api/products/:id
 // @desc    Get a single product by ID
-// @access  Public (or Private for admin)
+// @access  Public
 router.get("/products/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -163,36 +172,73 @@ router.get("/products/:id", async (req, res) => {
 });
 
 // @route   PUT /api/products/:id
-// @desc    Update a product (text fields only for now)
+// @desc    Update a product (including image)
 // @access  Private (should be protected)
-router.put("/products/:id", async (req, res) => {
-  const { name, category, price } = req.body;
-  const updateData = {};
-  if (name) updateData.name = name;
-  if (category) updateData.category = category;
-  if (price) updateData.price = parseFloat(price);
-
+router.put("/products/:id", upload.single("productImage"), async (req, res) => {
   try {
-    let product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ msg: "Product not found" });
     }
 
-    // Check if there's anything to update
-    if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ msg: "No update data provided." });
+    const { name, description, price, category, sizes, tags } = req.body;
+    const updateData = {};
+
+    // Update text fields if provided
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (price) updateData.price = parseFloat(price);
+    if (category) updateData.category = category;
+    // Update sizes/tags if provided (handle string/array)
+    if (sizes) updateData.sizes = typeof sizes === 'string' ? sizes.split(',').map(s => s.trim()).filter(s => s) : (Array.isArray(sizes) ? sizes : product.sizes);
+    if (tags) updateData.tags = typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(t => t) : (Array.isArray(tags) ? tags : product.tags);
+
+    let oldImagePublicId = product.imagePublicId; // Store old image ID for potential deletion
+
+    // Check if a new image file was uploaded
+    if (req.file) {
+      updateData.image = req.file.path; // New Cloudinary URL
+      updateData.imagePublicId = req.file.filename; // New public_id
+    } else {
+      // If no new file, keep existing image fields (no change needed in updateData for image)
     }
 
-    product = await Product.findByIdAndUpdate(
+    // Check if there's anything to update
+    if (Object.keys(updateData).length === 0 && !req.file) {
+        return res.status(400).json({ msg: "No update data or new image provided." });
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
       { $set: updateData },
       { new: true, runValidators: true } // Return updated doc, run schema validators
     );
 
-    res.json(product);
+    // If update was successful AND a new image was uploaded AND there was an old image, delete old image from Cloudinary
+    if (updatedProduct && req.file && oldImagePublicId) {
+        try {
+            await cloudinary.uploader.destroy(oldImagePublicId);
+            console.log("Successfully deleted old image from Cloudinary:", oldImagePublicId);
+        } catch (deleteErr) {
+            console.error("Error deleting old image from Cloudinary:", deleteErr);
+            // Don't fail the request, but log the error
+        }
+    }
+
+    res.json(updatedProduct);
 
   } catch (err) {
     console.error("Error updating product:", err.message);
+    // If error occurred after new upload, attempt to delete newly uploaded image
+    if (req.file && req.file.filename) {
+        try {
+            await cloudinary.uploader.destroy(req.file.filename);
+            console.log("Cleaned up newly uploaded image from Cloudinary due to update error.");
+        } catch (cleanupErr) {
+            console.error("Error cleaning up new Cloudinary image after update failure:", cleanupErr);
+        }
+    }
+    
     if (err.kind === 'ObjectId') {
         return res.status(400).json({ msg: "Invalid Product ID format" });
     }
@@ -218,13 +264,21 @@ router.delete("/products/:id", async (req, res) => {
       return res.status(404).json({ msg: "Product not found" });
     }
 
-    // Optional: Delete the associated image file from storage
-    // const imagePath = path.join(__dirname, "../../public", product.image);
-    // require('fs').unlink(imagePath, (err) => {
-    //   if (err) console.error("Error deleting product image file:", err);
-    // });
+    // Get the public_id for Cloudinary deletion before deleting the product from DB
+    const imagePublicId = product.imagePublicId;
 
     await Product.findByIdAndDelete(req.params.id);
+
+    // If deletion from DB was successful and there was an imagePublicId, delete from Cloudinary
+    if (imagePublicId) {
+        try {
+            await cloudinary.uploader.destroy(imagePublicId);
+            console.log("Successfully deleted image from Cloudinary:", imagePublicId);
+        } catch (deleteErr) {
+            console.error("Error deleting image from Cloudinary:", deleteErr);
+            // Don't fail the request, but log the error
+        }
+    }
 
     res.json({ msg: "Product removed successfully" });
 
@@ -238,3 +292,4 @@ router.delete("/products/:id", async (req, res) => {
 });
 
 module.exports = router;
+

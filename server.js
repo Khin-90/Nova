@@ -18,7 +18,7 @@ app.use(cors()); // Enable CORS for all origins (adjust for production)
 app.use(express.json()); // Body parser for JSON requests
 
 // Serve static files (HTML, CSS, JS) - Placed before API routes
-app.use(express.static(path.join(__dirname, "public")));
+// app.use(express.static(path.join(__dirname, "public"))); // Removed: Uploaded images now served by Cloudinary
 
 // MongoDB Connection
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/nova-wear";
