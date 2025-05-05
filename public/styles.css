@@ -210,3 +210,38 @@ textarea:focus {
     width: 100%;
   }
 }
+
+/* Product Tags */
+.tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem; /* 12px */
+  font-weight: 600;
+  z-index: 10;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  text-transform: uppercase; /* Optional: Makes tags look consistent */
+}
+
+.tag-new {
+  background-color: #dbeafe; /* blue-100 */
+  color: #1e40af; /* blue-800 */
+}
+
+.tag-out-of-stock {
+  background-color: #fee2e2; /* red-100 */
+  color: #991b1b; /* red-800 */
+}
+
+.tag-coming-soon {
+  background-color: #f3e8ff; /* purple-100 */
+  color: #6b21a8; /* purple-800 */
+}
+
+.tag-sale {
+  background-color: #dcfce7; /* green-100 */
+  color: #166534; /* green-800 */
+}
+

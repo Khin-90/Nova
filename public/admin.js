@@ -55,7 +55,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Product Management ---
   async function fetchProducts() {
     try {
-      productListDiv.innerHTML = '<div class="text-center py-4">Loading products...</div>';
+      productListDiv.innerHTML = 
+        '<div class="text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading products...</div>';
       
       const response = await fetch(`${API_BASE_URL}/api/products?nocache=${Date.now()}`);
       
@@ -92,16 +93,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const productElement = document.createElement("div");
       productElement.className = "product-item flex items-center justify-between p-4 border rounded-lg mb-2 bg-white hover:bg-gray-50 transition-colors";
       
-      // Create tags display
       const tagsHTML = product.tags?.map(tag => `
         <span class="tag tag-${tag}">${formatTagName(tag)}</span>
-      `).join('') || '';
+      `).join("") || "";
+
+      // *** FIX: Prepend API_BASE_URL to image src ***
+      const imageUrl = product.image.startsWith("http") ? product.image : `${API_BASE_URL}${product.image}`;
 
       productElement.innerHTML = `
         <div class="flex items-center space-x-4">
           <div class="relative">
             ${tagsHTML}
-            <img src="${product.image}?${Date.now()}" alt="${product.name}" 
+            <img src="${imageUrl}?${Date.now()}" alt="${product.name}" 
                  class="w-16 h-16 object-cover rounded border">
           </div>
           <div>
@@ -129,10 +132,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Order Management ---
   async function fetchOrders(status = "all") {
     try {
-      ordersListDiv.innerHTML = '<div class="text-center py-4">Loading orders...</div>';
+      ordersListDiv.innerHTML = 
+        '<div class="text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading orders...</div>';
       
       const endpoint = status === "all" ? "/api/orders" : `/api/orders?status=${status}`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      const response = await fetch(`${API_BASE_URL}${endpoint}?nocache=${Date.now()}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -167,16 +171,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const orderElement = document.createElement("div");
       orderElement.className = `order-item p-4 border rounded-lg bg-white ${order.status === 'delivered' ? 'bg-green-50' : ''}`;
       
-      const itemsHTML = order.items.map(item => `
-        <div class="flex items-center py-2 border-b">
-          <img src="${item.image}?${Date.now()}" alt="${item.name}" class="w-12 h-12 object-cover rounded mr-3">
-          <div class="flex-grow">
-            <h4 class="font-medium">${item.name}</h4>
-            <p class="text-sm text-gray-600">Size: ${item.size} | Qty: ${item.quantity}</p>
+      const itemsHTML = order.items.map(item => {
+        // *** FIX: Prepend API_BASE_URL to image src ***
+        const imageUrl = item.image.startsWith("http") ? item.image : `${API_BASE_URL}${item.image}`;
+        return `
+          <div class="flex items-center py-2 border-b">
+            <img src="${imageUrl}?${Date.now()}" alt="${item.name}" class="w-12 h-12 object-cover rounded mr-3">
+            <div class="flex-grow">
+              <h4 class="font-medium">${item.name}</h4>
+              <p class="text-sm text-gray-600">Size: ${item.size} | Qty: ${item.quantity}</p>
+            </div>
+            <span class="font-medium">KES ${(item.price * item.quantity).toFixed(2)}</span>
           </div>
-          <span class="font-medium">KES ${(item.price * item.quantity).toFixed(2)}</span>
-        </div>
-      `).join('');
+        `;
+      }).join("");
       
       orderElement.innerHTML = `
         <div class="flex justify-between items-start mb-2">
@@ -420,3 +428,4 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Initial Load ---
   fetchProducts();
 });
+

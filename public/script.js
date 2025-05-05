@@ -29,8 +29,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- State ---
   let searchTimeout = null;
-  let cart = JSON.parse(localStorage.getItem('cart')) || [];
+  let cart = JSON.parse(localStorage.getItem("cart")) || [];
   const DELIVERY_FEE = 450; // KES for locations outside Mombasa/Kilifi
+  const VALID_SIZES = ["S", "M", "L", "XL"]; // Define valid sizes
 
   // --- Initialize ---
   updateCartUI();
@@ -50,21 +51,54 @@ document.addEventListener("DOMContentLoaded", () => {
   contactForm?.addEventListener("submit", handleContactFormSubmit);
   newsletterForm?.addEventListener("submit", handleNewsletterSubmit);
 
-  // Add event delegation for category links and about links
-  document.addEventListener('click', (e) => {
+  // Add event delegation for category links, about links
+  document.addEventListener("click", (e) => {
     // Handle category links
-    const categoryLink = e.target.closest('[data-category]');
+    const categoryLink = e.target.closest("[data-category]");
     if (categoryLink) {
       e.preventDefault();
-      const category = categoryLink.getAttribute('data-category');
+      const category = categoryLink.getAttribute("data-category");
       loadProductsByCategory(category);
+      return; // Prevent other handlers if it's a category link
     }
 
     // Handle about links
-    const aboutLink = e.target.closest('#about-link, #footer-about-link, #mobile-about-link');
+    const aboutLink = e.target.closest("#about-link, #footer-about-link, #mobile-about-link");
     if (aboutLink) {
       e.preventDefault();
       showAboutSection();
+      return; // Prevent other handlers if it's an about link
+    }
+  });
+
+  // Event delegation for cart buttons (within cartItemsContainer)
+  cartItemsContainer?.addEventListener("click", (e) => {
+    console.log("Cart button clicked:", e.target);
+    const target = e.target.closest("button");
+    if (!target) return;
+
+    const id = target.getAttribute("data-id");
+    const size = target.getAttribute("data-size");
+    console.log(`Cart action triggered for ID: ${id}, Size: ${size}`);
+
+    // *** FIX: Validate ID and Size before proceeding ***
+    if (!id || !size || !VALID_SIZES.includes(size)) {
+        console.error(`Invalid ID ('${id}') or Size ('${size}') for cart action. Action aborted.`);
+        // Consider adding a user-facing message here if this happens often
+        // alert("Could not modify item. Please try removing and re-adding it.");
+        return; // Stop processing if ID or Size is invalid
+    }
+
+    // Now we know id and size are valid strings
+    if (target.classList.contains("remove-from-cart")) {
+        console.log("Attempting to remove item...");
+        removeFromCart(id, size);
+    } else if (target.classList.contains("decrease-btn")) {
+        console.log("Attempting to decrease quantity...");
+        updateCartItemQuantity(id, size, "decrease");
+    } else if (target.classList.contains("increase-btn")) {
+        console.log("Attempting to increase quantity...");
+        updateCartItemQuantity(id, size, "increase");
     }
   });
 
@@ -124,268 +158,327 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function showAboutSection() {
     hideAllSections();
-    document.getElementById("about-section-content").classList.remove("hidden");
+    const aboutSection = document.getElementById("about-section-content");
+    if (aboutSection) aboutSection.classList.remove("hidden");
     updatePageTitle("About Us - Nova Wear");
   }
 
   // --- Cart Functions ---
   function addToCart(product, size) {
-    const existingItem = cart.find(item => 
-      item.id === product.id && item.size === size);
-    
+    console.log("Adding to cart:", product, size);
+    // Ensure size is valid before adding
+    if (!VALID_SIZES.includes(size)) {
+        console.error(`Attempted to add product with invalid size: ${size}. Aborting.`);
+        alert(`Invalid size selected: ${size}. Please select a valid size.`);
+        return;
+    }
+
+    const existingItem = cart.find(
+      (item) => item.id === product.id && item.size === size
+    );
+
     if (existingItem) {
       existingItem.quantity += 1;
+      console.log("Increased quantity for existing item");
     } else {
-      cart.push({ 
-        ...product, 
-        size,
-        quantity: 1 
+      cart.push({
+        ...product,
+        size, // Size is now guaranteed to be valid
+        quantity: 1,
       });
+      console.log("Added new item to cart");
     }
-    
+
     saveCart();
     updateCartUI();
     openCart();
   }
 
   function removeFromCart(productId, size) {
-    cart = cart.filter(item => 
-      !(item.id === productId && item.size === size));
-    saveCart();
-    updateCartUI();
+    // Size is validated by the event listener, no need to re-validate here
+    console.log(`Removing item from cart: ID=${productId}, Size=${size}`);
+    const initialLength = cart.length;
+    cart = cart.filter(
+      (item) => !(item.id === productId && item.size === size)
+    );
+    if (cart.length < initialLength) {
+      console.log("Item successfully removed.");
+      saveCart();
+      updateCartUI();
+    } else {
+      // This should ideally not happen now due to validation
+      console.error("Failed to find item to remove. Cart state:", cart);
+    }
   }
 
   function updateCartItemQuantity(productId, size, action) {
-    const item = cart.find(item => 
-      item.id === productId && item.size === size);
-    
-    if (!item) return;
+    // Size is validated by the event listener
+    console.log(`Updating quantity: ID=${productId}, Size=${size}, Action=${action}`);
+    const item = cart.find(
+      (item) => item.id === productId && item.size === size
+    );
+
+    if (!item) {
+      // This should ideally not happen now
+      console.error("Item not found for quantity update. Cart state:", cart);
+      return;
+    }
 
     if (action === "increase") {
       item.quantity += 1;
+      console.log("Quantity increased to", item.quantity);
     } else if (action === "decrease") {
       item.quantity -= 1;
+      console.log("Quantity decreased to", item.quantity);
       if (item.quantity <= 0) {
+        console.log("Quantity is zero or less, removing item...");
         removeFromCart(productId, size);
-        return;
+        return; // Exit early as item is removed
       }
     }
-    
+
     saveCart();
     updateCartUI();
   }
 
   function saveCart() {
-    localStorage.setItem('cart', JSON.stringify(cart));
+    console.log("Saving cart to localStorage:", cart);
+    // Filter out any potentially invalid items before saving (belt and braces)
+    const validCart = cart.filter(item => item.id && item.size && VALID_SIZES.includes(item.size) && item.quantity > 0);
+    if (validCart.length !== cart.length) {
+        console.warn("Invalid items detected in cart before saving. They have been removed.", cart.filter(item => !validCart.includes(item)));
+        cart = validCart; // Update the main cart variable
+    }
+    localStorage.setItem("cart", JSON.stringify(cart));
   }
 
   function clearCart() {
+    console.log("Clearing cart");
     cart = [];
-    saveCart();
+    saveCart(); // Will save an empty array
     updateCartUI();
   }
 
   function updateCartUI() {
+    console.log("Updating Cart UI...");
     // Update cart count
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-    cartCount.textContent = totalItems;
+    if (cartCount) cartCount.textContent = totalItems;
 
     // Update cart items
+    if (!cartItemsContainer) {
+      console.error("Cart items container not found!");
+      return; // Ensure container exists
+    }
+
     if (cart.length === 0) {
-      cartItemsContainer.innerHTML = 
+      cartItemsContainer.innerHTML =
         '<p class="text-gray-500 text-center py-6">Your cart is empty</p>';
     } else {
-      cartItemsContainer.innerHTML = cart.map(item => `
-        <div class="flex items-center py-4 border-b">
-          <div class="w-16 h-16 flex-shrink-0 mr-4">
-            <img src="${item.image}?${Date.now()}" alt="${item.name}" class="w-full h-full object-cover rounded">
-          </div>
-          <div class="flex-grow">
-            <h4 class="font-medium">${item.name}</h4>
-            <p class="text-sm text-gray-600">Size: ${item.size}</p>
-            <div class="flex justify-between mt-1">
-              <div class="flex items-center">
-                <button class="cart-qty-btn decrease-btn px-2 py-0.5 border rounded" 
-                        data-id="${item.id}" data-size="${item.size}">-</button>
-                <span class="mx-2">${item.quantity}</span>
-                <button class="cart-qty-btn increase-btn px-2 py-0.5 border rounded" 
-                        data-id="${item.id}" data-size="${item.size}">+</button>
+      cartItemsContainer.innerHTML = cart
+        .map(
+          (item) => {
+            // Ensure item has valid properties before rendering
+            if (!item || !item.id || !item.size || !VALID_SIZES.includes(item.size) || !item.quantity) {
+                console.warn("Skipping rendering of invalid cart item:", item);
+                return ''; // Don't render this item
+            }
+
+            const imageUrl = item.image && item.image.startsWith("http") ? item.image : `${API_BASE_URL}${item.image || ''}`;
+            return `
+              <div class="flex items-center py-4 border-b">
+                <div class="w-16 h-16 flex-shrink-0 mr-4">
+                  <img src="${imageUrl}?${Date.now()}" alt="${item.name || 'Product'}" class="w-full h-full object-cover rounded">
+                </div>
+                <div class="flex-grow">
+                  <h4 class="font-medium">${item.name || 'Unknown Product'}</h4>
+                  <p class="text-sm text-gray-600">Size: ${item.size}</p>
+                  <div class="flex justify-between mt-1">
+                    <div class="flex items-center">
+                      <button class="cart-qty-btn decrease-btn px-2 py-0.5 border rounded" 
+                              data-id="${item.id}" data-size="${item.size}">-</button>
+                      <span class="mx-2">${item.quantity}</span>
+                      <button class="cart-qty-btn increase-btn px-2 py-0.5 border rounded" 
+                              data-id="${item.id}" data-size="${item.size}">+</button>
+                    </div>
+                    <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                </div>
+                <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" 
+                        data-id="${item.id}" data-size="${item.size}">
+                  <i class="fas fa-trash"></i>
+                </button>
               </div>
-              <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
-            </div>
-          </div>
-          <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" 
-                  data-id="${item.id}" data-size="${item.size}">
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
-      `).join("");
-
-      // Add event delegation for cart buttons
-      cartItemsContainer.addEventListener('click', (e) => {
-        const target = e.target.closest('button');
-        if (!target) return;
-
-        if (target.classList.contains('remove-from-cart')) {
-          const id = target.getAttribute('data-id');
-          const size = target.getAttribute('data-size');
-          removeFromCart(id, size);
-        } 
-        else if (target.classList.contains('decrease-btn')) {
-          const id = target.getAttribute('data-id');
-          const size = target.getAttribute('data-size');
-          updateCartItemQuantity(id, size, "decrease");
-        }
-        else if (target.classList.contains('increase-btn')) {
-          const id = target.getAttribute('data-id');
-          const size = target.getAttribute('data-size');
-          updateCartItemQuantity(id, size, "increase");
-        }
-      });
+            `;
+          }
+        )
+        .join("");
     }
 
     // Update totals
     updateDeliveryFee();
+    console.log("Cart UI update complete.");
   }
 
   function updateDeliveryFee() {
-    const subtotal = cart.reduce((sum, item) => 
-      sum + (item.price * item.quantity), 0);
-    const location = deliveryLocationSelect.value;
+    const subtotal = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    const location = deliveryLocationSelect?.value || "mombasa-kilifi"; // Default if select not found
     const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
     const total = subtotal + deliveryFee;
 
-    cartSubtotalEl.textContent = `KES ${subtotal.toFixed(2)}`;
-    deliveryFeeEl.textContent = `KES ${deliveryFee.toFixed(2)}`;
-    cartTotalEl.textContent = `KES ${total.toFixed(2)}`;
+    if (cartSubtotalEl) cartSubtotalEl.textContent = `KES ${subtotal.toFixed(2)}`;
+    if (deliveryFeeEl) deliveryFeeEl.textContent = `KES ${deliveryFee.toFixed(2)}`;
+    if (cartTotalEl) cartTotalEl.textContent = `KES ${total.toFixed(2)}`;
   }
 
   // --- Product Display Functions ---
   async function showHomePage() {
     hideAllSections();
     heroSection?.classList.remove("hidden");
-    productsContainer?.parentElement.classList.remove("hidden");
+    document.getElementById("featured-products-section")?.classList.remove("hidden"); // Use ID added earlier
     document.getElementById("contact")?.classList.remove("hidden");
-    document.querySelector(".bg-gray-900")?.classList.remove("hidden");
-    document.querySelector(".py-16.bg-gray-50")?.classList.remove("hidden");
+    document.querySelector(".bg-gray-900")?.classList.remove("hidden"); // Newsletter
+    document.querySelector(".py-16.bg-gray-50")?.classList.remove("hidden"); // Categories
     loadFeaturedProducts();
     updatePageTitle("Nova Wear - Contemporary Clothing");
   }
 
   async function loadFeaturedProducts() {
+    const featuredProductsContainer = document.getElementById("featured-products");
+    if (!featuredProductsContainer) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products?featured=true`);
+      const response = await fetch(`${API_BASE_URL}/api/products/featured?nocache=${Date.now()}`); // Use specific featured endpoint
       if (!response.ok) throw new Error("Failed to fetch featured products");
       const products = await response.json();
-      displayProducts(products);
+      displayProducts(products, featuredProductsContainer);
     } catch (error) {
       console.error("Error loading featured products:", error);
-      productsContainer.innerHTML = 
+      featuredProductsContainer.innerHTML =
         '<p class="text-red-600 text-center col-span-full">Error loading featured products.</p>';
     }
   }
 
   async function loadProductsByCategory(category) {
     hideAllSections();
-    productsContainer?.parentElement.classList.remove("hidden");
-    const categoryTitle = category === "all" ? "All Products" : 
+    const productSection = document.getElementById("product-display-section");
+    const productGrid = document.getElementById("product-grid");
+    const categoryTitleEl = document.getElementById("category-title");
+
+    if (!productSection || !productGrid || !categoryTitleEl) {
+      console.error("Required elements for category display not found.");
+      return;
+    }
+
+    productSection.classList.remove("hidden");
+    const categoryTitle = category === "all" ? "All Products" :
                          category.charAt(0).toUpperCase() + category.slice(1);
-    productsContainer.innerHTML = 
-      `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>` + 
-      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
+    categoryTitleEl.textContent = categoryTitle;
+    productGrid.innerHTML = 
+      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`; // Loading state
     updatePageTitle(`Shop ${categoryTitle} - Nova Wear`);
 
     try {
-      const endpoint = category === "all" ? "/api/products" : 
+      const endpoint = category === "all" ? "/api/products" :
                      `/api/products?category=${encodeURIComponent(category)}`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      const response = await fetch(`${API_BASE_URL}${endpoint}&nocache=${Date.now()}`); // Add cache buster and ensure base URL
       if (!response.ok) throw new Error(`Failed to fetch ${category} products`);
       const products = await response.json();
-      productsContainer.innerHTML = 
-        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>`;
-      displayProducts(products);
+      displayProducts(products, productGrid);
     } catch (error) {
       console.error(`Error loading ${category} products:`, error);
-      productsContainer.innerHTML = 
-        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">${categoryTitle}</h2>` +
+      productGrid.innerHTML = 
         `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
     }
   }
 
-  function displayProducts(products) {
-    if (!productsContainer) return;
-    const existingCards = productsContainer.querySelectorAll(".product-card, .animate-pulse, .text-gray-500, .text-red-600");
-    existingCards.forEach(card => card.remove());
+  function displayProducts(products, container) {
+    if (!container) return;
+    
+    container.innerHTML = ''; 
 
     if (products.length === 0) {
       const noProductsMsg = document.createElement("p");
       noProductsMsg.className = "text-gray-500 text-center col-span-full";
       noProductsMsg.textContent = "No products found.";
-      productsContainer.appendChild(noProductsMsg);
+      container.appendChild(noProductsMsg);
       return;
     }
 
-    products.forEach(product => {
+    products.forEach((product) => {
       const productCard = document.createElement("div");
-      productCard.className = 
+      productCard.className =
         "product-card bg-white rounded-lg overflow-hidden shadow hover:shadow-md transition-shadow duration-300";
-      
-      // Create tags display
+
       const tagsHTML = product.tags?.map(tag => `
         <span class="tag tag-${tag}">${formatTagName(tag)}</span>
       `).join('') || '';
 
+      const imageUrl = product.image && product.image.startsWith("http") ? product.image : `${API_BASE_URL}${product.image || ''}`;
+
       productCard.innerHTML = `
         <div class="relative overflow-hidden h-48 md:h-64">
           ${tagsHTML}
-          <img src="${product.image}?${Date.now()}" alt="${product.name}" class="product-image w-full h-full object-cover">
+          <img src="${imageUrl}?${Date.now()}" alt="${product.name || 'Product'}" class="product-image w-full h-full object-cover">
           <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white px-3 py-2">
-            <span class="text-sm">${product.category}</span>
+            <span class="text-sm">${product.category || 'Uncategorized'}</span>
           </div>
         </div>
         <div class="p-4">
-          <h3 class="font-medium text-lg">${product.name}</h3>
+          <h3 class="font-medium text-lg">${product.name || 'Unknown Product'}</h3>
           <div class="mt-2 mb-3">
             <label class="block text-sm font-medium text-gray-700 mb-1">Size</label>
             <div class="flex space-x-2">
-              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="S">S</button>
-              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="M">M</button>
-              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="L">L</button>
-              <button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="XL">XL</button>
+              ${(product.sizes || VALID_SIZES).map(size => 
+                `<button class="size-option border rounded px-2 py-1 text-sm hover:bg-gray-100" data-size="${size}">${size}</button>`
+              ).join('')}
             </div>
           </div>
           <div class="flex justify-between items-center">
-            <span class="text-gray-900 font-bold">KES ${product.price.toFixed(2)}</span>
-            <button class="add-to-cart bg-black text-white px-3 py-1 rounded-md text-sm hover:bg-gray-800" data-id="${product._id}">
+            <span class="text-gray-900 font-bold">KES ${(product.price || 0).toFixed(2)}</span>
+            <button class="add-to-cart bg-black text-white px-3 py-1 rounded-md text-sm hover:bg-gray-800" data-product-id="${product._id}">
               Add to Cart
             </button>
           </div>
         </div>
       `;
-      productsContainer.appendChild(productCard);
-      
-      // Set default selected size
+      container.appendChild(productCard);
+
       const sizeOptions = productCard.querySelectorAll(".size-option");
       if (sizeOptions.length > 0) {
-        sizeOptions[1].classList.add("bg-black", "text-white"); // Default to M
+        // Default to M if available, otherwise the first option
+        const defaultSizeBtn = productCard.querySelector('.size-option[data-size="M"]') || sizeOptions[0];
+        defaultSizeBtn.classList.add("bg-black", "text-white");
       }
 
-      // Add to cart button
       const addToCartBtn = productCard.querySelector(".add-to-cart");
       addToCartBtn.addEventListener("click", () => {
-        const selectedSize = productCard.querySelector(".size-option.bg-black")?.getAttribute("data-size") || "M";
-        addToCart({ 
+        const selectedSizeBtn = productCard.querySelector(".size-option.bg-black");
+        // Use default size from button if selection somehow failed
+        const selectedSize = selectedSizeBtn ? selectedSizeBtn.getAttribute("data-size") : (productCard.querySelector('.size-option[data-size="M"]') || sizeOptions[0])?.getAttribute("data-size"); 
+        
+        if (!selectedSize) {
+            console.error("Could not determine selected size for product:", product.name);
+            alert("Please select a size before adding to cart.");
+            return;
+        }
+
+        const productDataForCart = { 
           ...product, 
-          id: product._id,
-          size: selectedSize
-        }); 
+          id: product._id, 
+          image: product.image // Pass the original relative path to cart
+        };
+        addToCart(productDataForCart, selectedSize);
       });
 
-      // Size selection
-      sizeOptions.forEach(option => {
+      sizeOptions.forEach((option) => {
         option.addEventListener("click", (e) => {
           e.preventDefault();
-          sizeOptions.forEach(opt => opt.classList.remove("bg-black", "text-white"));
+          sizeOptions.forEach((opt) =>
+            opt.classList.remove("bg-black", "text-white")
+          );
           option.classList.add("bg-black", "text-white");
         });
       });
@@ -394,10 +487,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function formatTagName(tag) {
     const names = {
-      'new': 'New',
-      'out-of-stock': 'Out of Stock',
-      'coming-soon': 'Coming Soon',
-      'sale': 'Sale'
+      new: "New",
+      "out-of-stock": "Out of Stock",
+      "coming-soon": "Coming Soon",
+      sale: "Sale",
     };
     return names[tag] || tag;
   }
@@ -405,216 +498,285 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Search Functionality ---
   async function performSearch(query) {
     hideAllSections();
-    productsContainer?.parentElement.classList.remove("hidden");
-    productsContainer.innerHTML = 
-        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>` +
-        `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
+    const productSection = document.getElementById("product-display-section");
+    const productGrid = document.getElementById("product-grid");
+    const categoryTitleEl = document.getElementById("category-title");
+
+    if (!productSection || !productGrid || !categoryTitleEl) {
+      console.error("Required elements for search display not found.");
+      return;
+    }
+
+    productSection.classList.remove("hidden");
+    categoryTitleEl.textContent = `Search Results for "${query}"`;
+    productGrid.innerHTML = 
+      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`; // Loading state
     updatePageTitle(`Search Results for "${query}" - Nova Wear`);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}`);
+      const response = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}&nocache=${Date.now()}`);
       if (!response.ok) throw new Error("Search request failed");
       const products = await response.json();
-      productsContainer.innerHTML = 
-          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>`;
-      displayProducts(products);
+      displayProducts(products, productGrid);
     } catch (error) {
       console.error("Error performing search:", error);
-      productsContainer.innerHTML = 
-          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>` +
-          `<p class="text-red-600 text-center col-span-full">Error loading search results: ${error.message}.</p>`;
+      productGrid.innerHTML = 
+        `<p class="text-red-600 text-center col-span-full">Error loading search results: ${error.message}.</p>`;
     }
   }
 
-  // --- M-Pesa Checkout ---
-  async function handleMpesaCheckout() {
-    const phone = mpesaPhoneInput.value.trim();
-    const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
-    const deliveryFee = deliveryLocationSelect.value === "other" ? DELIVERY_FEE : 0;
-    const amount = subtotal + deliveryFee;
-    const location = deliveryLocationSelect.options[deliveryLocationSelect.selectedIndex].text;
-
-    // Validation
-    if (cart.length === 0) {
-      showMpesaResponse("Your cart is empty.", "error");
-      return;
-    }
-    if (!phone) {
-      showMpesaResponse("Please enter your M-Pesa phone number.", "error");
-      return;
-    }
-    if (!/^(\+?254|0)?\d{9}$/.test(phone.replace(/\s+/g, ""))) {
-      showMpesaResponse("Invalid phone number format.", "error");
-      return;
-    }
-    if (amount < 1) {
-      showMpesaResponse("Invalid cart amount.", "error");
-      return;
-    }
-
-    mpesaCheckoutBtn.disabled = true;
-    mpesaCheckoutBtn.innerHTML = 
-      `<svg class="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg> Processing...`;
-    showMpesaResponse("Initiating payment...", "info");
-
-    try {
-      // First create the order
-      const orderResponse = await fetch(`${API_BASE_URL}/api/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cart,
-          phone,
-          location,
-          subtotal,
-          deliveryFee,
-          total: amount
-        }),
-      });
-
-      if (!orderResponse.ok) {
-        throw new Error("Failed to create order");
-      }
-
-      // Then process payment
-      const paymentResponse = await fetch(`${API_BASE_URL}/api/mpesa/stkpush`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, amount }),
-      });
-      const data = await paymentResponse.json();
-
-      if (paymentResponse.ok) {
-        showMpesaResponse("Check your phone and enter your M-Pesa PIN.", "info");
-        
-        // Simulate successful payment
-        setTimeout(() => {
-          showMpesaResponse("Payment Successful! Thank you.", "success");
-          clearCart();
-        }, 15000);
-      } else {
-        throw new Error(data.msg || "Failed to initiate payment.");
-      }
-    } catch (error) {
-      console.error("Checkout Error:", error);
-      showMpesaResponse(`Error: ${error.message}`, "error");
-    } finally {
-      mpesaCheckoutBtn.disabled = false;
-      mpesaCheckoutBtn.innerHTML = 
-        `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1280px-M-PESA_LOGO-01.svg.png" alt="M-Pesa Logo" class="h-5 mr-2"> Pay with M-Pesa`;
-    }
-  }
-
-  function showMpesaResponse(message, type) {
-    if (!mpesaResponseEl) return;
-    mpesaResponseEl.textContent = message;
-    mpesaResponseEl.className = `text-sm mt-2 text-center ${
-      type === "success" ? "text-green-600" :
-      type === "error" ? "text-red-600" : "text-blue-600"
-    }`;
-  }
-
-  // --- Helper Functions ---
-  function hideAllSections() {
-    heroSection?.classList.add("hidden");
-    productsContainer?.parentElement.classList.add("hidden");
-    document.getElementById("contact")?.classList.add("hidden");
-    document.querySelector(".bg-gray-900")?.classList.add("hidden");
-    document.querySelector(".py-16.bg-gray-50")?.classList.add("hidden");
-    document.getElementById("about-section-content")?.classList.add("hidden");
-  }
-
-  function updatePageTitle(title) {
-    document.title = title;
-  }
-
-  // --- Form Handlers ---
+  // --- Form Handling ---
   async function handleContactFormSubmit(event) {
     event.preventDefault();
     const form = event.target;
+    const formData = new FormData(form);
     const responseDiv = document.getElementById("contact-response");
-    const submitButton = form.querySelector("button[type=\"submit\"]");
-    const name = form.elements.name.value;
-    const email = form.elements.email.value;
-    const message = form.elements.message.value;
+    const submitButton = form.querySelector("button[type='submit']");
+    const originalButtonText = submitButton.textContent;
 
     submitButton.disabled = true;
-    submitButton.innerHTML = "Sending...";
-    showResponseMessage(responseDiv, "", "");
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Sending...';
+    showResponse(responseDiv, "", ""); // Clear previous message
 
     try {
+      // Simulate API call
       const response = await fetch(`${API_BASE_URL}/api/contact`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(formData))
       });
-      const data = await response.json();
-      if (response.ok) {
-        showResponseMessage(responseDiv, data.msg, "success", "contact");
-        form.reset();
-      } else {
-        throw new Error(data.msg || "Something went wrong.");
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.msg || 'Failed to send message');
       }
+      showResponse(responseDiv, "Message sent successfully! We'll get back to you soon.", "success");
+      form.reset();
     } catch (error) {
-      console.error("Error submitting form:", error);
-      showResponseMessage(responseDiv, `Error: ${error.message}`, "error", "contact");
+      console.error("Error submitting contact form:", error);
+      showResponse(responseDiv, `Error: ${error.message || "Could not send message."}`, "error");
     } finally {
       submitButton.disabled = false;
-      submitButton.innerHTML = "Send Message";
+      submitButton.innerHTML = originalButtonText;
     }
   }
 
   async function handleNewsletterSubmit(event) {
     event.preventDefault();
     const form = event.target;
+    const emailInput = document.getElementById("newsletter-email");
     const responseDiv = document.getElementById("newsletter-response");
-    const submitButton = form.querySelector("button[type=\"submit\"]");
-    const email = form.elements["newsletter-email"].value;
+    const submitButton = form.querySelector("button[type='submit']");
+    const originalButtonText = submitButton.textContent;
 
     submitButton.disabled = true;
-    submitButton.innerHTML = "Subscribing...";
-    showResponseMessage(responseDiv, "", "");
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Subscribing...';
+    showResponse(responseDiv, "", ""); // Clear previous message
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+      // Simulate API call
+       const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput.value })
       });
-      const data = await response.json();
-      if (response.ok) {
-        showResponseMessage(responseDiv, data.msg, "success", "newsletter");
-        form.reset();
-      } else {
-        throw new Error(data.msg || "Something went wrong.");
+      const result = await response.json();
+       if (!response.ok) {
+        throw new Error(result.msg || 'Failed to subscribe');
       }
+      showResponse(responseDiv, "Thanks for subscribing!", "success");
+      form.reset();
     } catch (error) {
-      console.error("Error subscribing:", error);
-      showResponseMessage(responseDiv, `Error: ${error.message}`, "error", "newsletter");
+      console.error("Error subscribing to newsletter:", error);
+      showResponse(responseDiv, `Error: ${error.message || "Could not subscribe."}`, "error");
     } finally {
       submitButton.disabled = false;
-      submitButton.innerHTML = "Subscribe";
+      submitButton.innerHTML = originalButtonText;
     }
   }
 
-  function showResponseMessage(element, message, type, context = null) {
+  // --- M-Pesa Checkout ---
+  async function handleMpesaCheckout() {
+    if (!mpesaPhoneInput || !mpesaResponseEl) return;
+
+    const phone = mpesaPhoneInput.value.trim();
+    const totalText = cartTotalEl.textContent;
+    const amountMatch = totalText.match(/KES (\d+\.?\d*)/);
+    const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
+
+    if (!phone || !/^254\d{9}$/.test(phone)) {
+      showMpesaResponse("Please enter a valid M-Pesa number (e.g., 254712345678).", "error");
+      return;
+    }
+    if (amount <= 0) {
+      showMpesaResponse("Your cart is empty or total is zero.", "error");
+      return;
+    }
+
+    showMpesaResponse("Processing payment...", "info");
+    mpesaCheckoutBtn.disabled = true;
+    mpesaCheckoutBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/mpesa/stkpush`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, amount }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.msg || `STK Push failed: ${response.statusText}`);
+      }
+
+      showMpesaResponse(
+        "STK Push sent! Please check your phone to complete the payment.",
+        "success"
+      );
+      // Assume payment might succeed, create order optimistically
+      await createOrderAfterPaymentAttempt(phone, amount);
+
+    } catch (error) {
+      console.error("M-Pesa Checkout Error:", error);
+      showMpesaResponse(`Error: ${error.message}`, "error");
+    } finally {
+      mpesaCheckoutBtn.disabled = false;
+      mpesaCheckoutBtn.innerHTML = 'Pay with M-Pesa <i class="fas fa-lock ml-2"></i>';
+    }
+  }
+
+  // Renamed function for clarity
+  async function createOrderAfterPaymentAttempt(phone, amount) {
+    const location = deliveryLocationSelect?.value || "mombasa-kilifi";
+    const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
+    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const total = subtotal + deliveryFee;
+
+    const orderData = {
+      items: cart.map(item => ({ 
+        productId: item.id, 
+        name: item.name, 
+        size: item.size, 
+        quantity: item.quantity, 
+        price: item.price,
+        image: item.image // Include original relative image URL in order data
+      })),
+      customerName: "Online Customer", // Placeholder - Consider adding a name field
+      phone: phone,
+      location: location,
+      subtotal: subtotal,
+      deliveryFee: deliveryFee,
+      total: total,
+      paymentMethod: "M-Pesa",
+      status: "pending" // Status will remain pending until payment confirmed (requires webhook)
+    };
+
+    try {
+      // Need an endpoint to create orders
+      const response = await fetch(`${API_BASE_URL}/api/orders`, { // Assuming /api/orders exists
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(orderData),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.msg || "Failed to create order");
+      }
+      console.log("Order created successfully (pending payment confirmation):", result.orderId);
+      // Clear cart only after order is successfully created
+      clearCart(); 
+      showMpesaResponse("Payment initiated and order placed (pending confirmation). Thank you!", "success", true);
+      setTimeout(closeCart, 3000); // Close cart after success message
+
+    } catch (error) {
+      console.error("Error creating order:", error);
+      // Don't clear cart if order creation fails
+      showMpesaResponse(`Payment initiated, but failed to save order: ${error.message}. Please contact support.`, "error", true);
+    }
+  }
+
+  function showMpesaResponse(message, type, keepVisible = false) {
+    if (!mpesaResponseEl) return;
+    mpesaResponseEl.textContent = message;
+    mpesaResponseEl.className = `p-3 rounded-md text-sm ${type === "success" 
+      ? "bg-green-100 border border-green-400 text-green-700" 
+      : type === "error" 
+      ? "bg-red-100 border border-red-400 text-red-700" 
+      : "bg-blue-100 border border-blue-400 text-blue-700"}`;
+    mpesaResponseEl.classList.remove("hidden");
+
+    if (!keepVisible) {
+      setTimeout(() => {
+        mpesaResponseEl.classList.add("hidden");
+        mpesaResponseEl.textContent = "";
+        mpesaResponseEl.className = "";
+      }, 5000);
+    }
+  }
+
+  // --- Helper Functions ---
+  function hideAllSections() {
+    heroSection?.classList.add("hidden");
+    document.getElementById("featured-products-section")?.classList.add("hidden");
+    document.getElementById("contact")?.classList.add("hidden");
+    document.querySelector(".bg-gray-900")?.classList.add("hidden"); // Newsletter
+    document.querySelector(".py-16.bg-gray-50")?.classList.add("hidden"); // Categories
+    document.getElementById("about-section-content")?.classList.add("hidden");
+    document.getElementById("product-display-section")?.classList.add("hidden");
+  }
+
+  function showResponse(element, message, type) {
     if (!element) return;
     element.textContent = message;
-    element.className = `py-2 px-4 rounded-md mt-4 ${
-      type === "success" ? 
-        (context === "newsletter" ? "bg-green-500 text-white" : "bg-green-100 text-green-700") :
-      type === "error" ? 
-        (context === "newsletter" ? "bg-red-500 text-white" : "bg-red-100 text-red-700") : ""
-    }`;
-    
+    element.className = `py-3 px-4 rounded-md ${type === "success" 
+      ? "bg-green-100 text-green-800" 
+      : "bg-red-100 text-red-800"}`;
+    element.classList.remove("hidden");
+
+    // Auto-hide after 5 seconds
     setTimeout(() => {
-      if (element.textContent === message) {
-        element.classList.add("hidden");
-        element.textContent = "";
-      }
+      element.classList.add("hidden");
     }, 5000);
   }
+
+  function updatePageTitle(title) {
+    document.title = title;
+  }
+
+  // --- Initial Setup ---
+  function initializeProductDisplayArea() {
+    const mainContentArea = document.querySelector('body'); 
+    if (!document.getElementById('product-display-section')) {
+      const displaySection = document.createElement('section');
+      displaySection.id = 'product-display-section';
+      displaySection.className = 'hidden py-16 bg-white'; 
+      displaySection.innerHTML = `
+        <div class="container mx-auto px-4">
+          <h2 id="category-title" class="text-3xl font-bold mb-12 text-center"></h2>
+          <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <!-- Products will be loaded here -->
+          </div>
+        </div>
+      `;
+      // Insert after header or at the beginning of body
+      const header = document.querySelector('header');
+      if (header) {
+        header.insertAdjacentElement('afterend', displaySection);
+      } else {
+        mainContentArea.insertBefore(displaySection, mainContentArea.firstChild);
+      }
+    }
+    // Check if featured products container exists
+    if (!document.getElementById('featured-products')) {
+        console.warn('Featured products container (#featured-products) not found in HTML.');
+    }
+  }
+
+  initializeProductDisplayArea(); 
+
 });
+
