@@ -12,31 +12,46 @@ document.addEventListener("DOMContentLoaded", () => {
   const contactForm = document.getElementById("contact-form");
   const newsletterForm = document.getElementById("newsletter-form");
   const productsContainer = document.getElementById("featured-products");
-  const mainContentArea = document.querySelector("body > section:not(#contact):not(.bg-gray-900)");
   const heroSection = document.querySelector(".relative.bg-black.text-white");
   const heroShopNowBtn = document.getElementById("hero-shop-now-btn");
   const mpesaCheckoutBtn = document.getElementById("mpesa-checkout-btn");
   const mpesaPhoneInput = document.getElementById("mpesa-phone");
   const mpesaResponseEl = document.getElementById("mpesa-response");
-  const aboutLink = document.getElementById("about-link");
-  const mobileAboutLink = document.getElementById("mobile-about-link");
-  const footerAboutLink = document.getElementById("footer-about-link");
   const deliveryLocationSelect = document.getElementById("delivery-location");
   const deliveryFeeEl = document.getElementById("delivery-fee");
   const cartTotalEl = document.getElementById("cart-total");
+  const cartSubtotalEl = document.getElementById("cart-subtotal");
+  const cartItemsContainer = document.getElementById("cart-items");
+  const cartCount = document.getElementById("cart-count");
 
   // Base URL for API endpoints
   const API_BASE_URL = "https://novawear.onrender.com";
 
   // --- State ---
   let searchTimeout = null;
-  let cart = []; // Simple in-memory cart
+  let cart = JSON.parse(localStorage.getItem('cart')) || [];
   const DELIVERY_FEE = 300; // KES for locations outside Mombasa/Kilifi
 
-  // --- Event Listeners ---
+  // --- Initialize ---
+  updateCartUI();
+  showHomePage();
 
-  // Toggle search input visibility
-  searchBtn?.addEventListener("click", () => {
+  // --- Event Listeners ---
+  searchBtn?.addEventListener("click", toggleSearch);
+  searchInput?.addEventListener("input", handleSearchInput);
+  searchInput?.addEventListener("keypress", handleSearchEnter);
+  mobileMenuBtn?.addEventListener("click", toggleMobileMenu);
+  mobileShopBtn?.addEventListener("click", toggleMobileCategories);
+  cartBtn?.addEventListener("click", openCart);
+  closeCartBtn?.addEventListener("click", closeCart);
+  heroShopNowBtn?.addEventListener("click", openCartFromHero);
+  mpesaCheckoutBtn?.addEventListener("click", handleMpesaCheckout);
+  deliveryLocationSelect?.addEventListener("change", updateDeliveryFee);
+  contactForm?.addEventListener("submit", handleContactFormSubmit);
+  newsletterForm?.addEventListener("submit", handleNewsletterSubmit);
+
+  // --- Navigation Functions ---
+  function toggleSearch() {
     if (searchInput.classList.contains("hidden")) {
       searchInput.classList.remove("hidden");
       searchInput.focus();
@@ -45,123 +60,180 @@ document.addEventListener("DOMContentLoaded", () => {
         performSearch(searchInput.value.trim());
       }
     }
-  });
+  }
 
-  // Live search on input (with debounce)
-  searchInput?.addEventListener("input", () => {
+  function handleSearchInput() {
     clearTimeout(searchTimeout);
     const query = searchInput.value.trim();
     if (query.length > 1) {
-      searchTimeout = setTimeout(() => {
-        performSearch(query);
-      }, 300);
+      searchTimeout = setTimeout(() => performSearch(query), 300);
     } else if (query.length === 0) {
-        showHomePage();
+      showHomePage();
     }
-  });
-  
-  // Search on pressing Enter
-  searchInput?.addEventListener("keypress", (event) => {
-      if (event.key === "Enter") {
-          event.preventDefault();
-          clearTimeout(searchTimeout);
-          const query = searchInput.value.trim();
-          if (query) {
-              performSearch(query);
-          }
-      }
-  });
+  }
 
-  // Mobile menu toggle
-  mobileMenuBtn?.addEventListener("click", () => {
+  function handleSearchEnter(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      clearTimeout(searchTimeout);
+      const query = searchInput.value.trim();
+      if (query) performSearch(query);
+    }
+  }
+
+  function toggleMobileMenu() {
     mobileMenu.classList.toggle("hidden");
-  });
+  }
 
-  // Mobile shop categories toggle
-  mobileShopBtn?.addEventListener("click", () => {
+  function toggleMobileCategories() {
     mobileCategories.classList.toggle("hidden");
-  });
+  }
 
-  // Cart sidebar toggle
-  cartBtn?.addEventListener("click", () => {
+  function openCart() {
     cartSidebar.classList.remove("cart-closed");
     cartSidebar.classList.add("cart-open");
-  });
+  }
 
-  closeCartBtn?.addEventListener("click", () => {
+  function closeCart() {
     cartSidebar.classList.remove("cart-open");
     cartSidebar.classList.add("cart-closed");
-  });
-
-  // Contact form submission
-  if (contactForm) {
-    contactForm.addEventListener("submit", handleContactFormSubmit);
   }
 
-  // Newsletter subscription
-  if (newsletterForm) {
-    newsletterForm.addEventListener("submit", handleNewsletterSubmit);
-  }
-
-  // Add listener for hero Shop Now button
-  heroShopNowBtn?.addEventListener("click", (event) => {
+  function openCartFromHero(event) {
     event.preventDefault();
-    cartSidebar.classList.remove("cart-closed");
-    cartSidebar.classList.add("cart-open");
-  });
-
-  // M-Pesa Checkout Button
-  mpesaCheckoutBtn?.addEventListener("click", handleMpesaCheckout);
-
-  // About page links
-  [aboutLink, mobileAboutLink, footerAboutLink].forEach(link => {
-    link?.addEventListener("click", (e) => {
-      e.preventDefault();
-      showAboutPage();
-    });
-  });
-
-  // Delivery location change
-  deliveryLocationSelect?.addEventListener("change", updateDeliveryFee);
-
-  // --- Navigation Handling ---
-  function handleNavigation(event) {
-    const link = event.target.closest("a[href^=\"/\"], a[href^=\"#\"], a[data-category]");
-    if (!link) return;
-
-    const href = link.getAttribute("href");
-    const category = link.getAttribute("data-category");
-
-    if (category) {
-      event.preventDefault();
-      loadProductsByCategory(category);
-      mobileMenu?.classList.add("hidden");
-      return;
-    }
-    
-    if (href === "/" || href === "/shop" || href === "/collections" || href === "/shop/all" || href === "/shop/new") {
-      event.preventDefault();
-      showHomePage();
-    } else if (href === "#contact") {
-      return; // Allow default behavior for contact link
-    } else if (href === "#") {
-      event.preventDefault();
-    }
-    
-    mobileMenu?.classList.add("hidden");
+    openCart();
   }
 
-  document.querySelector("header nav")?.addEventListener("click", handleNavigation);
-  document.getElementById("mobile-menu")?.addEventListener("click", handleNavigation);
-  document.querySelector("header a[href=\"/\"]")?.addEventListener("click", handleNavigation);
-  document.querySelectorAll("a[data-category]").forEach(link => {
-    link.addEventListener("click", handleNavigation);
-  });
+  // --- Cart Functions ---
+  function addToCart(product, size) {
+    const existingItem = cart.find(item => 
+      item.id === product.id && item.size === size);
+    
+    if (existingItem) {
+      existingItem.quantity += 1;
+    } else {
+      cart.push({ 
+        ...product, 
+        size,
+        quantity: 1 
+      });
+    }
+    
+    saveCart();
+    updateCartUI();
+    openCart();
+  }
 
-  // --- Content Loading Functions ---
+  function removeFromCart(productId, size) {
+    cart = cart.filter(item => 
+      !(item.id === productId && item.size === size));
+    saveCart();
+    updateCartUI();
+  }
 
-  function showHomePage() {
-    console.log("Navigating to Home");
+  function updateCartItemQuantity(productId, size, action) {
+    const item = cart.find(item => 
+      item.id === productId && item.size === size);
+    
+    if (!item) return;
+
+    if (action === "increase") {
+      item.quantity += 1;
+    } else if (action === "decrease") {
+      item.quantity -= 1;
+      if (item.quantity <= 0) {
+        removeFromCart(productId, size);
+        return;
+      }
+    }
+    
+    saveCart();
+    updateCartUI();
+  }
+
+  function saveCart() {
+    localStorage.setItem('cart', JSON.stringify(cart));
+  }
+
+  function clearCart() {
+    cart = [];
+    saveCart();
+    updateCartUI();
+  }
+
+  function updateCartUI() {
+    // Update cart count
+    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+    cartCount.textContent = totalItems;
+
+    // Update cart items
+    if (cart.length === 0) {
+      cartItemsContainer.innerHTML = 
+        '<p class="text-gray-500 text-center py-6">Your cart is empty</p>';
+    } else {
+      cartItemsContainer.innerHTML = cart.map(item => `
+        <div class="flex items-center py-4 border-b">
+          <div class="w-16 h-16 flex-shrink-0 mr-4">
+            <img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover rounded">
+          </div>
+          <div class="flex-grow">
+            <h4 class="font-medium">${item.name}</h4>
+            <p class="text-sm text-gray-600">Size: ${item.size}</p>
+            <div class="flex justify-between mt-1">
+              <div class="flex items-center">
+                <button class="cart-qty-btn px-2 py-0.5 border rounded" 
+                        data-id="${item.id}" data-size="${item.size}" data-action="decrease">-</button>
+                <span class="mx-2">${item.quantity}</span>
+                <button class="cart-qty-btn px-2 py-0.5 border rounded" 
+                        data-id="${item.id}" data-size="${item.size}" data-action="increase">+</button>
+              </div>
+              <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
+            </div>
+          </div>
+          <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" 
+                  data-id="${item.id}" data-size="${item.size}">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      `).join("");
+
+      // Add event listeners to cart buttons
+      cartItemsContainer.querySelectorAll(".remove-from-cart").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.getAttribute("data-id");
+          const size = e.currentTarget.getAttribute("data-size");
+          removeFromCart(id, size);
+        });
+      });
+
+      cartItemsContainer.querySelectorAll(".cart-qty-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.getAttribute("data-id");
+          const size = e.currentTarget.getAttribute("data-size");
+          const action = e.currentTarget.getAttribute("data-action");
+          updateCartItemQuantity(id, size, action);
+        });
+      });
+    }
+
+    // Update totals
+    updateDeliveryFee();
+  }
+
+  function updateDeliveryFee() {
+    const subtotal = cart.reduce((sum, item) => 
+      sum + (item.price * item.quantity), 0);
+    const location = deliveryLocationSelect.value;
+    const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
+    const total = subtotal + deliveryFee;
+
+    cartSubtotalEl.textContent = `KES ${subtotal.toFixed(2)}`;
+    deliveryFeeEl.textContent = `KES ${deliveryFee.toFixed(2)}`;
+    cartTotalEl.textContent = `KES ${total.toFixed(2)}`;
+  }
+
+  // --- Product Display Functions ---
+  async function showHomePage() {
     hideAllSections();
     heroSection?.classList.remove("hidden");
     productsContainer?.parentElement.classList.remove("hidden");
@@ -173,7 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadProductsByCategory(category) {
-    console.log(`Loading category: ${category}`);
     hideAllSections();
     productsContainer?.parentElement.classList.remove("hidden");
     const categoryTitle = category === "all" ? "All Products" : 
@@ -200,29 +271,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function showAboutPage() {
-    console.log("Navigating to About");
-    hideAllSections();
-    const aboutSection = document.getElementById("about-section-content");
-    aboutSection.classList.remove("hidden");
-    updatePageTitle("About Us - Nova Wear");
-  }
-  
-  function hideAllSections() {
-      heroSection?.classList.add("hidden");
-      productsContainer?.parentElement.classList.add("hidden");
-      document.getElementById("contact")?.classList.add("hidden");
-      document.querySelector(".bg-gray-900")?.classList.add("hidden");
-      document.querySelector(".py-16.bg-gray-50")?.classList.add("hidden");
-      document.getElementById("about-section-content")?.classList.add("hidden");
-  }
-  
-  function updatePageTitle(title) {
-      document.title = title;
-  }
-
   async function loadAllProducts() {
-    console.log("Loading all products for home page");
     productsContainer.innerHTML = 
       `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` + 
       `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
@@ -235,11 +284,9 @@ document.addEventListener("DOMContentLoaded", () => {
       displayProducts(products);
     } catch (error) {
       console.error("Error loading products:", error);
-      if (productsContainer) {
-        productsContainer.innerHTML = 
-          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` +
-          `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
-      }
+      productsContainer.innerHTML = 
+        `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Featured Products</h2>` +
+        `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
     }
   }
 
@@ -249,20 +296,27 @@ document.addEventListener("DOMContentLoaded", () => {
     existingCards.forEach(card => card.remove());
 
     if (products.length === 0) {
-        const noProductsMsg = document.createElement("p");
-        noProductsMsg.className = "text-gray-500 text-center col-span-full";
-        noProductsMsg.textContent = "No products found.";
-        productsContainer.appendChild(noProductsMsg);
-        return;
+      const noProductsMsg = document.createElement("p");
+      noProductsMsg.className = "text-gray-500 text-center col-span-full";
+      noProductsMsg.textContent = "No products found.";
+      productsContainer.appendChild(noProductsMsg);
+      return;
     }
 
     products.forEach(product => {
       const productCard = document.createElement("div");
       productCard.className = 
         "product-card bg-white rounded-lg overflow-hidden shadow hover:shadow-md transition-shadow duration-300";
+      
+      // Create tags display
+      const tagsHTML = product.tags?.map(tag => `
+        <span class="tag tag-${tag}">${formatTagName(tag)}</span>
+      `).join('') || '';
+
       productCard.innerHTML = `
         <div class="relative overflow-hidden h-48 md:h-64">
-          <img src="${product.image}" alt="${product.name}" class="product-image w-full h-full object-cover">
+          ${tagsHTML}
+          <img src="${product.image}?${Date.now()}" alt="${product.name}" class="product-image w-full h-full object-cover">
           <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white px-3 py-2">
             <span class="text-sm">${product.category}</span>
           </div>
@@ -294,6 +348,7 @@ document.addEventListener("DOMContentLoaded", () => {
         sizeOptions[1].classList.add("bg-black", "text-white"); // Default to M
       }
 
+      // Add to cart button
       const addToCartBtn = productCard.querySelector(".add-to-cart");
       addToCartBtn.addEventListener("click", () => {
         const selectedSize = productCard.querySelector(".size-option.bg-black")?.getAttribute("data-size") || "M";
@@ -315,9 +370,18 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function formatTagName(tag) {
+    const names = {
+      'new': 'New',
+      'out-of-stock': 'Out of Stock',
+      'coming-soon': 'Coming Soon',
+      'sale': 'Sale'
+    };
+    return names[tag] || tag;
+  }
+
   // --- Search Functionality ---
   async function performSearch(query) {
-    console.log(`Searching for: ${query}`);
     hideAllSections();
     productsContainer?.parentElement.classList.remove("hidden");
     productsContainer.innerHTML = 
@@ -326,156 +390,51 @@ document.addEventListener("DOMContentLoaded", () => {
     updatePageTitle(`Search Results for "${query}" - Nova Wear`);
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error("Search request failed");
-        const products = await response.json();
-        productsContainer.innerHTML = 
-            `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>`;
-        displayProducts(products);
+      const response = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error("Search request failed");
+      const products = await response.json();
+      productsContainer.innerHTML = 
+          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>`;
+      displayProducts(products);
     } catch (error) {
-        console.error("Error performing search:", error);
-        productsContainer.innerHTML = 
-            `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>` +
-            `<p class="text-red-600 text-center col-span-full">Error loading search results: ${error.message}.</p>`;
+      console.error("Error performing search:", error);
+      productsContainer.innerHTML = 
+          `<h2 class="text-3xl font-bold mb-12 text-center col-span-full">Search Results for "${query}"</h2>` +
+          `<p class="text-red-600 text-center col-span-full">Error loading search results: ${error.message}.</p>`;
     }
   }
 
-  // --- Cart Functionality ---
-
-  function addToCart(product) {
-    const existingItem = cart.find(item => item.id === product.id && item.size === product.size);
-    if (existingItem) {
-      existingItem.quantity += 1;
-    } else {
-      cart.push({ ...product, quantity: 1 });
-    }
-    updateCartUI();
-    cartSidebar.classList.remove("cart-closed");
-    cartSidebar.classList.add("cart-open");
-  }
-
-  function updateCartUI() {
-    const cartItemsContainer = document.getElementById("cart-items");
-    const cartCount = document.getElementById("cart-count");
-    const cartSubtotal = document.getElementById("cart-subtotal");
-
-    cartCount.textContent = cart.reduce((total, item) => total + item.quantity, 0);
-
-    if (cart.length === 0) {
-      cartItemsContainer.innerHTML = 
-        '<p class="text-gray-500 text-center py-6">Your cart is empty</p>';
-    } else {
-      cartItemsContainer.innerHTML = cart.map(item => `
-        <div class="flex items-center py-4 border-b">
-          <div class="w-16 h-16 flex-shrink-0 mr-4">
-            <img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover rounded">
-          </div>
-          <div class="flex-grow">
-            <h4 class="font-medium">${item.name}</h4>
-            <p class="text-sm text-gray-600">Size: ${item.size}</p>
-            <div class="flex justify-between mt-1">
-              <div class="flex items-center">
-                <button class="cart-qty-btn text-sm px-2 py-0.5 border rounded" data-id="${item.id}" data-size="${item.size}" data-action="decrease">-</button>
-                <span class="mx-2">${item.quantity}</span>
-                <button class="cart-qty-btn text-sm px-2 py-0.5 border rounded" data-id="${item.id}" data-size="${item.size}" data-action="increase">+</button>
-              </div>
-              <span>KES ${(item.price * item.quantity).toFixed(2)}</span>
-            </div>
-          </div>
-          <button class="remove-from-cart ml-4 text-gray-400 hover:text-red-500" data-id="${item.id}" data-size="${item.size}">
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
-      `).join("");
-
-      cartItemsContainer.querySelectorAll(".remove-from-cart").forEach(button => {
-        button.addEventListener("click", () => {
-          const productId = button.getAttribute("data-id");
-          const size = button.getAttribute("data-size");
-          removeFromCart(productId, size);
-        });
-      });
-
-      cartItemsContainer.querySelectorAll(".cart-qty-btn").forEach(button => {
-        button.addEventListener("click", () => {
-          const productId = button.getAttribute("data-id");
-          const size = button.getAttribute("data-size");
-          const action = button.getAttribute("data-action");
-          updateCartItemQuantity(productId, size, action);
-        });
-      });
-    }
-
-    updateDeliveryFee();
-  }
-
-  function removeFromCart(productId, size) {
-    cart = cart.filter(item => !(item.id === productId && item.size === size));
-    updateCartUI();
-  }
-
-  function updateCartItemQuantity(productId, size, action) {
-    const item = cart.find(item => item.id === productId && item.size === size);
-    if (item) {
-      if (action === "increase") {
-        item.quantity += 1;
-      } else if (action === "decrease") {
-        item.quantity -= 1;
-        if (item.quantity <= 0) {
-          removeFromCart(productId, size);
-          return;
-        }
-      }
-      updateCartUI();
-    }
-  }
-
-  function updateDeliveryFee() {
-    if (!deliveryLocationSelect || !deliveryFeeEl || !cartSubtotal || !cartTotalEl) return;
-    
-    const location = deliveryLocationSelect.value;
-    const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
-    const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
-    
-    deliveryFeeEl.textContent = `KES ${deliveryFee.toFixed(2)}`;
-    document.getElementById("cart-subtotal").textContent = `KES ${subtotal.toFixed(2)}`;
-    cartTotalEl.textContent = `KES ${(subtotal + deliveryFee).toFixed(2)}`;
-  }
-
-  function clearCart() {
-      cart = [];
-      updateCartUI();
-  }
-
-  // --- M-Pesa Checkout Handler ---
+  // --- M-Pesa Checkout ---
   async function handleMpesaCheckout() {
     const phone = mpesaPhoneInput.value.trim();
     const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
     const deliveryFee = deliveryLocationSelect.value === "other" ? DELIVERY_FEE : 0;
     const amount = subtotal + deliveryFee;
 
-    // Basic validation
+    // Validation
     if (cart.length === 0) {
-        showMpesaResponse("Your cart is empty.", "error");
-        return;
+      showMpesaResponse("Your cart is empty.", "error");
+      return;
     }
     if (!phone) {
-        showMpesaResponse("Please enter your M-Pesa phone number.", "error");
-        return;
+      showMpesaResponse("Please enter your M-Pesa phone number.", "error");
+      return;
     }
-    // Basic phone format check (doesn't guarantee validity)
     if (!/^(\+?254|0)?\d{9}$/.test(phone.replace(/\s+/g, ""))) {
-        showMpesaResponse("Invalid phone number format.", "error");
-        return;
+      showMpesaResponse("Invalid phone number format.", "error");
+      return;
     }
     if (amount < 1) {
-        showMpesaResponse("Invalid cart amount.", "error");
-        return;
+      showMpesaResponse("Invalid cart amount.", "error");
+      return;
     }
 
     mpesaCheckoutBtn.disabled = true;
     mpesaCheckoutBtn.innerHTML = 
-      `<svg class="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...`;
+      `<svg class="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg> Processing...`;
     showMpesaResponse("Initiating payment...", "info");
 
     try {
@@ -487,54 +446,50 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
 
       if (response.ok) {
-        // STK Push initiated successfully by backend
         showMpesaResponse("Check your phone and enter your M-Pesa PIN.", "info");
         
-        // --- SIMULATED SUCCESS --- 
-        console.log("Simulating payment success after 15 seconds...");
+        // Simulate successful payment
         setTimeout(() => {
-            console.log("Simulated success received!");
-            showMpesaResponse("Payment Successful! Thank you.", "success");
-            clearCart(); // Clear the cart on simulated success
-        }, 15000); // Simulate after 15 seconds
-        // --- END SIMULATED SUCCESS ---
-
+          showMpesaResponse("Payment Successful! Thank you.", "success");
+          clearCart();
+        }, 15000);
       } else {
-        // Backend reported an error initiating STK push
         throw new Error(data.msg || "Failed to initiate payment.");
       }
     } catch (error) {
       console.error("M-Pesa Checkout Error:", error);
       showMpesaResponse(`Error: ${error.message}`, "error");
     } finally {
-      // Re-enable button after simulation starts or on error
       mpesaCheckoutBtn.disabled = false;
       mpesaCheckoutBtn.innerHTML = 
         `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1280px-M-PESA_LOGO-01.svg.png" alt="M-Pesa Logo" class="h-5 mr-2"> Pay with M-Pesa`;
     }
   }
 
-  // Helper to show M-Pesa response messages
   function showMpesaResponse(message, type) {
-      if (!mpesaResponseEl) return;
-      mpesaResponseEl.textContent = message;
-      mpesaResponseEl.classList.remove("text-green-600", "text-red-600", "text-blue-600", "hidden");
-      if (type === "success") mpesaResponseEl.classList.add("text-green-600");
-      else if (type === "error") mpesaResponseEl.classList.add("text-red-600");
-      else mpesaResponseEl.classList.add("text-blue-600"); // Info
-
-      // Clear message after some time, unless it's the final success message
-      if (type !== "success") {
-          setTimeout(() => {
-              if (mpesaResponseEl.textContent === message) { // Avoid clearing newer messages
-                  mpesaResponseEl.textContent = "";
-                  mpesaResponseEl.classList.add("hidden");
-              }
-          }, 7000);
-      }
+    if (!mpesaResponseEl) return;
+    mpesaResponseEl.textContent = message;
+    mpesaResponseEl.className = `text-sm mt-2 text-center ${
+      type === "success" ? "text-green-600" :
+      type === "error" ? "text-red-600" : "text-blue-600"
+    }`;
   }
 
-  // --- Form Handlers (Contact, Newsletter) ---
+  // --- Helper Functions ---
+  function hideAllSections() {
+    heroSection?.classList.add("hidden");
+    productsContainer?.parentElement.classList.add("hidden");
+    document.getElementById("contact")?.classList.add("hidden");
+    document.querySelector(".bg-gray-900")?.classList.add("hidden");
+    document.querySelector(".py-16.bg-gray-50")?.classList.add("hidden");
+    document.getElementById("about-section-content")?.classList.add("hidden");
+  }
+
+  function updatePageTitle(title) {
+    document.title = title;
+  }
+
+  // --- Form Handlers ---
   async function handleContactFormSubmit(event) {
     event.preventDefault();
     const form = event.target;
@@ -603,30 +558,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- Helper to show response messages ---
   function showResponseMessage(element, message, type, context = null) {
     if (!element) return;
     element.textContent = message;
-    element.classList.remove("success", "error", "bg-green-100", "text-green-700", "bg-red-100", "text-red-700", "bg-green-500", "bg-red-500", "hidden");
-    element.classList.add("py-2", "px-4", "rounded-md", "mt-4");
-
-    if (type === "success") {
-        if (context === "newsletter") element.classList.add("bg-green-500", "text-white");
-        else element.classList.add("bg-green-100", "text-green-700");
-    } else if (type === "error") {
-        if (context === "newsletter") element.classList.add("bg-red-500", "text-white");
-        else element.classList.add("bg-red-100", "text-red-700");
-    }
+    element.className = `py-2 px-4 rounded-md mt-4 ${
+      type === "success" ? 
+        (context === "newsletter" ? "bg-green-500 text-white" : "bg-green-100 text-green-700") :
+      type === "error" ? 
+        (context === "newsletter" ? "bg-red-500 text-white" : "bg-red-100 text-red-700") : ""
+    }`;
     
     setTimeout(() => {
-      if (element.textContent === message) { // Avoid clearing newer messages
-          element.classList.add("hidden");
-          element.textContent = "";
+      if (element.textContent === message) {
+        element.classList.add("hidden");
+        element.textContent = "";
       }
     }, 5000);
   }
-
-  // --- Initial Load ---
-  showHomePage();
-  updateCartUI();
 });

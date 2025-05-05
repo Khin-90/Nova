@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       productListDiv.innerHTML = '<div class="text-center py-4">Loading products...</div>';
       
-      const response = await fetch("https://novawear.onrender.com/api/products");
+      const response = await fetch("https://novawear.onrender.com/api/products?nocache=" + Date.now());
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function displayProducts(products) {
-    productListDiv.innerHTML = ""; // Clear previous list or loading message
+    productListDiv.innerHTML = "";
     
     if (products.length === 0) {
       productListDiv.innerHTML = `
@@ -42,15 +42,23 @@ document.addEventListener("DOMContentLoaded", () => {
     
     products.forEach(product => {
       const productElement = document.createElement("div");
-      productElement.className = 
-        "product-item flex items-center justify-between p-4 border rounded-lg mb-2 bg-white hover:bg-gray-50 transition-colors";
+      productElement.className = "product-item flex items-center justify-between p-4 border rounded-lg mb-2 bg-white hover:bg-gray-50 transition-colors";
+      
+      // Create tags display
+      const tagsHTML = product.tags?.map(tag => `
+        <span class="tag tag-${tag}">${formatTagName(tag)}</span>
+      `).join('') || '';
+
       productElement.innerHTML = `
         <div class="flex items-center space-x-4">
-          <img src="${product.image}" alt="${product.name}" 
-               class="w-16 h-16 object-cover rounded border">
+          <div class="relative">
+            ${tagsHTML}
+            <img src="${product.image}?${Date.now()}" alt="${product.name}" 
+                 class="w-16 h-16 object-cover rounded border">
+          </div>
           <div>
             <h3 class="font-semibold">${product.name}</h3>
-            <p class="text-sm text-gray-600">${product.category} - $${product.price.toFixed(2)}</p>
+            <p class="text-sm text-gray-600">${product.category} - KES ${product.price.toFixed(2)}</p>
             <p class="text-xs text-gray-500">ID: ${product.id}</p>
           </div>
         </div>
@@ -64,6 +72,17 @@ document.addEventListener("DOMContentLoaded", () => {
     
     productListDiv.appendChild(productsContainer);
 
+    // Helper function for tag display names
+    function formatTagName(tag) {
+      const names = {
+        'new': 'New',
+        'out-of-stock': 'Out of Stock',
+        'coming-soon': 'Coming Soon',
+        'sale': 'Sale'
+      };
+      return names[tag] || tag;
+    }
+
     // Add event listeners to delete buttons
     document.querySelectorAll(".delete-product-btn").forEach(button => {
       button.addEventListener("click", handleDeleteProduct);
@@ -73,9 +92,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Handle Add Product Form Submission ---
   addProductForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    showResponseMessage(addResponseMessageDiv, "", ""); // Clear previous message
+    showResponseMessage(addResponseMessageDiv, "", "");
 
     const formData = new FormData(addProductForm);
+    const tags = Array.from(addProductForm.querySelectorAll('input[name="tags"]:checked'))
+                  .map(checkbox => checkbox.value);
+    
+    // Append tags to formData
+    tags.forEach(tag => formData.append('tags', tag));
+
     const submitButton = addProductForm.querySelector("button[type='submit']");
     const originalButtonText = submitButton.textContent;
     
@@ -113,7 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleDeleteProduct(event) {
     const button = event.target;
     const productId = button.getAttribute("data-id");
-    showResponseMessage(deleteResponseMessageDiv, "", ""); // Clear previous message
+    showResponseMessage(deleteResponseMessageDiv, "", "");
 
     if (!confirm("Are you sure you want to delete this product?")) {
       return;
@@ -136,7 +161,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       showResponseMessage(deleteResponseMessageDiv, `Success: ${result.msg}`, "success");
-      await fetchProducts(); // Refresh the product list
+      await fetchProducts();
 
     } catch (error) {
       console.error("Error deleting product:", error);
