@@ -32,11 +32,11 @@ const upload = multer({
 // --- Product API Routes ---
 
 // @route   GET /api/products/featured
-// @desc    Get featured products (limit to 4 for the homepage)
+// @desc    Get featured products (limit to 34 for the homepage)
 // @access  Public
 router.get("/products/featured", async (req, res) => {
   try {
-    const products = await Product.find().limit(4);
+    const products = await Product.find().limit(34);
     res.json(products);
   } catch (err) {
     console.error("Error fetching featured products:", err.message);
@@ -63,21 +63,29 @@ router.post("/products", upload.single("productImage"), async (req, res) => {
       return res.status(400).json({ msg: "Please fill in all required fields (name, category, price)." });
     }
 
-    // Convert sizes/tags from string if they are sent as comma-separated strings
-    // Adjust this based on how your admin form sends the data
-    const parsedSizes = typeof sizes === 'string' ? sizes.split(',').map(s => s.trim()).filter(s => s) : (Array.isArray(sizes) ? sizes : []);
-    const parsedTags = typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(t => t) : (Array.isArray(tags) ? tags : []);
-
-    const newProduct = new Product({
+    // FIX: Construct productData carefully to allow Mongoose defaults and handle form data for description, tags, sizes
+    const productData = {
       name,
-      description: description || '', // Add description field
       category,
-      price: parseFloat(price), // Ensure price is a number
-      sizes: parsedSizes, // Add sizes field
-      tags: parsedTags,   // Add tags field
-      image: req.file.path, // Cloudinary provides the full secure URL in req.file.path
-      imagePublicId: req.file.filename // Store the public_id (often in filename) if you need to delete later
-    });
+      price: parseFloat(price),
+      image: req.file.path, // From multer/Cloudinary
+      imagePublicId: req.file.filename // From multer/Cloudinary
+    };
+
+    if (description !== undefined) {
+      productData.description = description;
+    }
+    // For tags, FormData sends an array if multiple checkboxes are checked,
+    // a single string if one is checked, or undefined if none are checked.
+    if (tags !== undefined) {
+      productData.tags = Array.isArray(tags) ? tags : [tags]; // Ensure tags is an array
+    }
+    // For sizes, similar logic. If undefined, Mongoose default will apply.
+    if (sizes !== undefined) {
+      productData.sizes = Array.isArray(sizes) ? sizes : [sizes]; // Ensure sizes is an array
+    }
+
+    const newProduct = new Product(productData);
 
     const product = await newProduct.save();
     res.status(201).json(product);
@@ -122,14 +130,9 @@ router.get("/products", async (req, res) => {
   let query = {};
 
   if (category && category !== 'all') {
-    // Assuming tags might include 'new', 'sale' etc. which are not categories
-    // If 'new', 'sale' etc. are categories in your model, adjust this logic
-    const validCategories = ['Hoodie', 'Tshirt', 'Shorts']; // Example: Define actual categories
-    if (validCategories.includes(category)) {
-        query.category = { $regex: new RegExp(`^${category}$`, 'i') };
-    } else {
-        // Handle tags like 'new', 'sale' if needed, e.g., query.tags = category;
-    }
+    // FIX: Make category matching case-insensitive and use categories from the Product schema or a broader list
+    // For now, we'll assume categories are stored as they are sent from frontend (lowercase)
+    query.category = { $regex: new RegExp(`^${category}$`, 'i') };
   }
 
   if (search) {

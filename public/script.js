@@ -357,7 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelector(".bg-gray-900")?.classList.remove("hidden"); // Newsletter
     document.querySelector(".py-16.bg-gray-50")?.classList.remove("hidden"); // Categories
     loadFeaturedProducts();
-    updatePageTitle("Nova Wear - Contemporary Clothing");
+    updatePageTitle("Nova Wear - We Style You");
   }
 
   async function loadFeaturedProducts() {
