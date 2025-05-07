@@ -555,17 +555,21 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponse(responseDiv, "", ""); // Clear previous message
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/contact`, {
+      const response = await fetch(form.action, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.fromEntries(formData))
+        body: formData,
+        headers: {
+          'Accept': 'application/json'
+        }
       });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.msg || 'Failed to send message');
+
+      if (response.ok) {
+        showResponse(responseDiv, "Message sent successfully! We'll get back to you soon.", "success");
+        form.reset();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send message');
       }
-      showResponse(responseDiv, "Message sent successfully! We'll get back to you soon.", "success");
-      form.reset();
     } catch (error) {
       console.error("Error submitting contact form:", error);
       showResponse(responseDiv, `Error: ${error.message || "Could not send message."}`, "error");
@@ -578,7 +582,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleNewsletterSubmit(event) {
     event.preventDefault();
     const form = event.target;
-    const emailInput = document.getElementById("newsletter-email");
+    const formData = new FormData(form);
     const responseDiv = document.getElementById("newsletter-response");
     const submitButton = form.querySelector("button[type='submit']");
     const originalButtonText = submitButton.textContent;
@@ -588,17 +592,21 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponse(responseDiv, "", ""); // Clear previous message
 
     try {
-       const response = await fetch(`${API_BASE_URL}/api/subscribe`, {
+      const response = await fetch(form.action, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailInput.value })
+        body: formData,
+        headers: {
+          'Accept': 'application/json'
+        }
       });
-      const result = await response.json();
-       if (!response.ok) {
-        throw new Error(result.msg || 'Failed to subscribe');
+
+      if (response.ok) {
+        showResponse(responseDiv, "Thanks for subscribing!", "success");
+        form.reset();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to subscribe');
       }
-      showResponse(responseDiv, "Thanks for subscribing!", "success");
-      form.reset();
     } catch (error) {
       console.error("Error subscribing to newsletter:", error);
       showResponse(responseDiv, `Error: ${error.message || "Could not subscribe."}`, "error");
@@ -783,6 +791,4 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   initializeProductDisplayArea(); 
-
 });
-
