@@ -26,6 +26,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Base URL for API endpoints
   const API_BASE_URL = "https://novawear.onrender.com";
+  
+  // Fallback products data if API fails
+  const FALLBACK_PRODUCTS = [
+    {
+      id: "fallback1",
+      name: "Classic Hoodie",
+      price: 2499,
+      image: "/images/fallback-hoodie.jpg",
+      category: "hoodies",
+      sizes: ["S", "M", "L", "XL"],
+      tags: ["new"]
+    },
+    {
+      id: "fallback2",
+      name: "Basic T-Shirt",
+      price: 1299,
+      image: "/images/fallback-tshirt.jpg",
+      category: "tshirts",
+      sizes: ["S", "M", "L"],
+      tags: ["sale"]
+    },
+    {
+      id: "fallback3",
+      name: "Slim Fit Pants",
+      price: 1899,
+      image: "/images/fallback-pants.jpg",
+      category: "pants",
+      sizes: ["M", "L", "XL"],
+      tags: []
+    },
+    {
+      id: "fallback4",
+      name: "Denim Jacket",
+      price: 3499,
+      image: "/images/fallback-jacket.jpg",
+      category: "outerwear",
+      sizes: ["S", "M", "L"],
+      tags: ["new"]
+    }
+  ];
 
   // --- State ---
   let searchTimeout = null;
@@ -59,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       const category = categoryLink.getAttribute("data-category");
       loadProductsByCategory(category);
-      return; // Prevent other handlers if it's a category link
+      return;
     }
 
     // Handle about links
@@ -67,35 +107,28 @@ document.addEventListener("DOMContentLoaded", () => {
     if (aboutLink) {
       e.preventDefault();
       showAboutSection();
-      return; // Prevent other handlers if it's an about link
+      return;
     }
   });
 
-  // Event delegation for cart buttons (within cartItemsContainer)
+  // Event delegation for cart buttons
   cartItemsContainer?.addEventListener("click", (e) => {
-    console.log("Cart button clicked:", e.target);
     const target = e.target.closest("button");
     if (!target) return;
 
     const id = target.getAttribute("data-id");
     const size = target.getAttribute("data-size");
-    console.log(`Cart action triggered for ID: ${id}, Size: ${size}`);
 
-    // Validate ID and Size before proceeding
     if (!id || !size || !VALID_SIZES.includes(size)) {
-        console.error(`Invalid ID ('${id}') or Size ('${size}') for cart action. Action aborted.`);
-        return; // Stop processing if ID or Size is invalid
+        console.error(`Invalid ID ('${id}') or Size ('${size}') for cart action.`);
+        return;
     }
 
-    // Now we know id and size are valid strings
     if (target.classList.contains("remove-from-cart")) {
-        console.log("Attempting to remove item...");
         removeFromCart(id, size);
     } else if (target.classList.contains("decrease-btn")) {
-        console.log("Attempting to decrease quantity...");
         updateCartItemQuantity(id, size, "decrease");
     } else if (target.classList.contains("increase-btn")) {
-        console.log("Attempting to increase quantity...");
         updateCartItemQuantity(id, size, "increase");
     }
   });
@@ -163,14 +196,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Cart Functions ---
   function addToCart(product, size) {
-    console.log("addToCart received product:", product); // Log received product
-    // Ensure size is valid before adding
     if (!VALID_SIZES.includes(size)) {
-        console.error(`Attempted to add product with invalid size: ${size}. Aborting.`);
+        console.error(`Attempted to add product with invalid size: ${size}.`);
         alert(`Invalid size selected: ${size}. Please select a valid size.`);
         return;
     }
-    // *** FIX: Ensure product.id exists before proceeding ***
+    
     if (!product || !product.id) {
         console.error("Attempted to add product without a valid ID:", product);
         alert("Cannot add this item to the cart. Product ID is missing.");
@@ -183,23 +214,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (existingItem) {
       existingItem.quantity += 1;
-      console.log("Increased quantity for existing item");
     } else {
-      // Create a clean item object for the cart
       const cartItem = {
-        id: product.id, // Use the validated ID
+        id: product.id,
         name: product.name,
         price: product.price,
-        image: product.image, // Keep original relative path for consistency
-        size: size, // Use the validated size
+        image: product.image,
+        size: size,
         quantity: 1,
-        // Optionally include other needed fields like category, tags, etc.
         category: product.category,
         tags: product.tags,
         sizes: product.sizes
       };
       cart.push(cartItem);
-      console.log("Added new item to cart:", cartItem);
     }
 
     saveCart();
@@ -208,43 +235,35 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function removeFromCart(productId, size) {
-    // Size is validated by the event listener
-    console.log(`Removing item from cart: ID=${productId}, Size=${size}`);
     const initialLength = cart.length;
     cart = cart.filter(
       (item) => !(item.id === productId && item.size === size)
     );
     if (cart.length < initialLength) {
-      console.log("Item successfully removed.");
       saveCart();
       updateCartUI();
     } else {
-      console.error("Failed to find item to remove. Cart state:", cart);
+      console.error("Failed to find item to remove.");
     }
   }
 
   function updateCartItemQuantity(productId, size, action) {
-    // Size is validated by the event listener
-    console.log(`Updating quantity: ID=${productId}, Size=${size}, Action=${action}`);
     const item = cart.find(
       (item) => item.id === productId && item.size === size
     );
 
     if (!item) {
-      console.error("Item not found for quantity update. Cart state:", cart);
+      console.error("Item not found for quantity update.");
       return;
     }
 
     if (action === "increase") {
       item.quantity += 1;
-      console.log("Quantity increased to", item.quantity);
     } else if (action === "decrease") {
       item.quantity -= 1;
-      console.log("Quantity decreased to", item.quantity);
       if (item.quantity <= 0) {
-        console.log("Quantity is zero or less, removing item...");
         removeFromCart(productId, size);
-        return; // Exit early as item is removed
+        return;
       }
     }
 
@@ -253,29 +272,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function saveCart() {
-    console.log("Saving cart to localStorage:", cart);
-    // Ensure cart is an array before stringifying
     const cartToSave = Array.isArray(cart) ? cart : [];
     localStorage.setItem("cart", JSON.stringify(cartToSave));
   }
 
   function clearCart() {
-    console.log("Clearing cart");
     cart = [];
-    saveCart(); // Will save an empty array
+    saveCart();
     updateCartUI();
   }
 
   function updateCartUI() {
-    console.log("Updating Cart UI...");
-    // Update cart count
-    const totalItems = cart.reduce((sum, item) => sum + (item.quantity || 0), 0); // Ensure quantity exists
+    const totalItems = cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
     if (cartCount) cartCount.textContent = totalItems;
 
-    // Update cart items
     if (!cartItemsContainer) {
       console.error("Cart items container not found!");
-      return; // Ensure container exists
+      return;
     }
 
     if (cart.length === 0) {
@@ -285,19 +298,11 @@ document.addEventListener("DOMContentLoaded", () => {
       cartItemsContainer.innerHTML = cart
         .map(
           (item) => {
-            // *** FIX: Check for valid ID more specifically ***
-            let reason = "";
-            if (!item) reason = "Item is null/undefined";
-            else if (!item.id) reason = "Missing ID";
-            else if (!item.size || !VALID_SIZES.includes(item.size)) reason = `Invalid Size ('${item.size}')`;
-            else if (!item.quantity || item.quantity <= 0) reason = `Invalid Quantity ('${item.quantity}')`;
-            
-            if (reason) {
-                console.warn(`Skipping rendering cart item: ${reason}. Item data:`, item);
-                return ''; // Don't render this item
+            if (!item || !item.id || !item.size || !VALID_SIZES.includes(item.size) || !item.quantity || item.quantity <= 0) {
+                console.warn("Skipping invalid cart item:", item);
+                return '';
             }
 
-            // Item is considered valid for rendering here
             const imageUrl = item.image && item.image.startsWith("http") ? item.image : `${API_BASE_URL}${item.image || ''}`;
             return `
               <div class="flex items-center py-4 border-b">
@@ -329,9 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .join("");
     }
 
-    // Update totals
     updateDeliveryFee();
-    console.log("Cart UI update complete.");
   }
 
   function updateDeliveryFee() {
@@ -339,7 +342,7 @@ document.addEventListener("DOMContentLoaded", () => {
       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0
     );
-    const location = deliveryLocationSelect?.value || "mombasa-kilifi"; // Default if select not found
+    const location = deliveryLocationSelect?.value || "mombasa";
     const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
     const total = subtotal + deliveryFee;
 
@@ -352,10 +355,10 @@ document.addEventListener("DOMContentLoaded", () => {
   async function showHomePage() {
     hideAllSections();
     heroSection?.classList.remove("hidden");
-    document.getElementById("featured-products-section")?.classList.remove("hidden"); // Use ID added earlier
+    document.getElementById("featured-products-section")?.classList.remove("hidden");
     document.getElementById("contact")?.classList.remove("hidden");
-    document.querySelector(".bg-gray-900")?.classList.remove("hidden"); // Newsletter
-    document.querySelector(".py-16.bg-gray-50")?.classList.remove("hidden"); // Categories
+    document.querySelector(".bg-gray-900")?.classList.remove("hidden");
+    document.querySelector(".py-16.bg-gray-50")?.classList.remove("hidden");
     loadFeaturedProducts();
     updatePageTitle("Nova Wear - We Style You");
   }
@@ -363,15 +366,13 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadFeaturedProducts() {
     const featuredProductsContainer = document.getElementById("featured-products");
     if (!featuredProductsContainer) return;
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products/featured?nocache=${Date.now()}`); // Use specific featured endpoint
-      if (!response.ok) throw new Error("Failed to fetch featured products");
-      const products = await response.json();
-      displayProducts(products, featuredProductsContainer);
+      const response = await fetchWithFallback(`${API_BASE_URL}/api/products/featured`);
+      displayProducts(response, featuredProductsContainer);
     } catch (error) {
       console.error("Error loading featured products:", error);
-      featuredProductsContainer.innerHTML =
-        '<p class="text-red-600 text-center col-span-full">Error loading featured products.</p>';
+      displayProducts(FALLBACK_PRODUCTS, featuredProductsContainer);
     }
   }
 
@@ -391,20 +392,17 @@ document.addEventListener("DOMContentLoaded", () => {
                          category.charAt(0).toUpperCase() + category.slice(1);
     categoryTitleEl.textContent = categoryTitle;
     productGrid.innerHTML = 
-      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`; // Loading state
+      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
     updatePageTitle(`Shop ${categoryTitle} - Nova Wear`);
 
     try {
       const endpoint = category === "all" ? "/api/products" :
                      `/api/products?category=${encodeURIComponent(category)}`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}&nocache=${Date.now()}`); // Add cache buster and ensure base URL
-      if (!response.ok) throw new Error(`Failed to fetch ${category} products`);
-      const products = await response.json();
-      displayProducts(products, productGrid);
+      const response = await fetchWithFallback(`${API_BASE_URL}${endpoint}`);
+      displayProducts(response, productGrid);
     } catch (error) {
       console.error(`Error loading ${category} products:`, error);
-      productGrid.innerHTML = 
-        `<p class="text-red-600 text-center col-span-full">Error loading products: ${error.message}.</p>`;
+      displayProducts(FALLBACK_PRODUCTS.filter(p => category === "all" || p.category === category), productGrid);
     }
   }
 
@@ -413,7 +411,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     container.innerHTML = ''; 
 
-    if (products.length === 0) {
+    if (!Array.isArray(products) || products.length === 0) {
       const noProductsMsg = document.createElement("p");
       noProductsMsg.className = "text-gray-500 text-center col-span-full";
       noProductsMsg.textContent = "No products found.";
@@ -422,10 +420,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     products.forEach((product) => {
-      // *** FIX: Ensure product has an ID before rendering card ***
       if (!product || !product.id) {
           console.warn("Skipping display of product with missing ID:", product);
-          return; // Don't render card if product ID is missing
+          return;
       }
 
       const productCard = document.createElement("div");
@@ -478,14 +475,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const selectedSize = selectedSizeBtn ? selectedSizeBtn.getAttribute("data-size") : (productCard.querySelector('.size-option[data-size="M"]') || sizeOptions[0])?.getAttribute("data-size"); 
         
         if (!selectedSize) {
-            console.error("Could not determine selected size for product:", product.name);
             alert("Please select a size before adding to cart.");
             return;
         }
 
-        // *** FIX: Pass the correct product object with 'id' property ***
-        // The 'product' object here already has 'id' thanks to the Mongoose virtual
-        console.log("Product data being passed to addToCart:", product);
         addToCart(product, selectedSize);
       });
 
@@ -526,18 +519,41 @@ document.addEventListener("DOMContentLoaded", () => {
     productSection.classList.remove("hidden");
     categoryTitleEl.textContent = `Search Results for "${query}"`;
     productGrid.innerHTML = 
-      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`; // Loading state
+      `<div class="animate-pulse bg-gray-200 rounded-lg h-80 col-span-full md:col-span-2 lg:col-span-4"></div>`;
     updatePageTitle(`Search Results for "${query}" - Nova Wear`);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}&nocache=${Date.now()}`);
-      if (!response.ok) throw new Error("Search request failed");
-      const products = await response.json();
-      displayProducts(products, productGrid);
+      const response = await fetchWithFallback(`${API_BASE_URL}/api/products?search=${encodeURIComponent(query)}`);
+      displayProducts(response, productGrid);
     } catch (error) {
       console.error("Error performing search:", error);
-      productGrid.innerHTML = 
-        `<p class="text-red-600 text-center col-span-full">Error loading search results: ${error.message}.</p>`;
+      const filteredProducts = FALLBACK_PRODUCTS.filter(p => 
+        p.name.toLowerCase().includes(query.toLowerCase()) || 
+        p.category.toLowerCase().includes(query.toLowerCase())
+      );
+      displayProducts(filteredProducts, productGrid);
+    }
+  }
+
+  // --- API Helper Function ---
+  async function fetchWithFallback(url) {
+    try {
+      const response = await fetch(`${url}?nocache=${Date.now()}`);
+      
+      // First check if response is HTML (error page)
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        throw new Error('Server returned HTML instead of JSON');
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error(`API request to ${url} failed:`, error);
+      throw error; // Re-throw to allow caller to handle fallback
     }
   }
 
@@ -552,7 +568,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     submitButton.disabled = true;
     submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Sending...';
-    showResponse(responseDiv, "", ""); // Clear previous message
+    showResponse(responseDiv, "", "");
 
     try {
       const response = await fetch(form.action, {
@@ -589,7 +605,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     submitButton.disabled = true;
     submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Subscribing...';
-    showResponse(responseDiv, "", ""); // Clear previous message
+    showResponse(responseDiv, "", "");
 
     try {
       const response = await fetch(form.action, {
@@ -647,6 +663,12 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({ phone, amount }),
       });
 
+      // Check if response is HTML
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        throw new Error('Payment service unavailable');
+      }
+
       const result = await response.json();
 
       if (!response.ok) {
@@ -669,7 +691,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function createOrderAfterPaymentAttempt(phone, amount) {
-    const location = deliveryLocationSelect?.value || "mombasa-kilifi";
+    const location = deliveryLocationSelect?.value || "mombasa";
     const deliveryFee = location === "other" ? DELIVERY_FEE : 0;
     const subtotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
     const total = subtotal + deliveryFee;
@@ -681,9 +703,9 @@ document.addEventListener("DOMContentLoaded", () => {
         size: item.size, 
         quantity: item.quantity, 
         price: item.price,
-        image: item.image // Include original relative image URL in order data
+        image: item.image
       })),
-      customerName: "Online Customer", // Placeholder
+      customerName: "Online Customer",
       phone: phone,
       location: location,
       subtotal: subtotal,
@@ -701,11 +723,19 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify(orderData),
       });
+      
+      // Check if response is HTML
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        throw new Error('Order service unavailable');
+      }
+      
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.msg || "Failed to create order");
       }
-      console.log("Order created successfully (pending payment confirmation):", result.orderId);
+      
+      console.log("Order created successfully:", result.orderId);
       clearCart(); 
       showMpesaResponse("Payment initiated and order placed (pending confirmation). Thank you!", "success", true);
       setTimeout(closeCart, 3000); 
@@ -740,8 +770,8 @@ document.addEventListener("DOMContentLoaded", () => {
     heroSection?.classList.add("hidden");
     document.getElementById("featured-products-section")?.classList.add("hidden");
     document.getElementById("contact")?.classList.add("hidden");
-    document.querySelector(".bg-gray-900")?.classList.add("hidden"); // Newsletter
-    document.querySelector(".py-16.bg-gray-50")?.classList.add("hidden"); // Categories
+    document.querySelector(".bg-gray-900")?.classList.add("hidden");
+    document.querySelector(".py-16.bg-gray-50")?.classList.add("hidden");
     document.getElementById("about-section-content")?.classList.add("hidden");
     document.getElementById("product-display-section")?.classList.add("hidden");
   }
@@ -784,9 +814,6 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         mainContentArea.insertBefore(displaySection, mainContentArea.firstChild);
       }
-    }
-    if (!document.getElementById('featured-products')) {
-        console.warn('Featured products container (#featured-products) not found in HTML.');
     }
   }
 
