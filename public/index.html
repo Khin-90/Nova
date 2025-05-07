@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Nova Wear-We style You</title>
+  <link rel="icon" href="favicon.jpeg" type="image/jpeg">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="styles.css"/>
@@ -87,7 +88,7 @@
         <h1 class="text-5xl font-bold leading-tight mb-6 fade-in">Contemporary Style for Modern Life</h1>
         <p class="text-xl mb-8 fade-in delay-1">Discover the latest trends in fashion with our premium quality clothing line.</p>
         <div class="flex space-x-4 fade-in delay-2">
-          <a href="#" id="hero-shop-now-btn" class="px-8 py-3 bg-white text-black font-medium hover:bg-gray-100 transition duration-300 rounded-md">Shop Now</a>
+          <a href="#" id="hero-shop-now-btn" data-category="all" class="px-8 py-3 bg-white text-black font-medium hover:bg-gray-100 transition duration-300 rounded-md">Shop Now</a>
           <a href="https://instagram.com/khin.szn" target="_blank" class="px-8 py-3 border border-white font-medium hover:bg-white hover:text-black transition duration-300 rounded-md">View Our Instagram</a>
         </div>
       </div>
@@ -109,7 +110,7 @@
   </section>
 
   <!-- Collection Categories -->
-  <section class="py-16 bg-gray-50">
+  <section id="collection-categories-section" class="py-16 bg-gray-50">
     <div class="container mx-auto px-4">
       <h2 class="text-3xl font-bold mb-12 text-center">Shop by Category</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -192,7 +193,7 @@
     </div>
   </section>
     <!-- Newsletter Section - Updated for Formspree -->
-    <section class="py-16 bg-gray-900 text-white">
+    <section id="newsletter-section" class="py-16 bg-gray-900 text-white">
       <div class="container mx-auto px-4">
         <div class="max-w-3xl mx-auto text-center">
           <h2 class="text-3xl font-bold mb-6">Join Our Newsletter</h2>
@@ -305,3 +306,18 @@
   <script src="script.js"></script>
 </body>
 </html>
+<!-- Product Display Section (for categories/search results) -->
+<section id="product-display-section" class="hidden py-16 bg-white">
+  <div class="container mx-auto px-4">
+    <h2 id="category-title" class="text-3xl font-bold mb-12 text-center"></h2>
+    <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <!-- Products will be loaded here by JavaScript -->
+      <div class="animate-pulse bg-gray-200 rounded-lg h-80"></div>
+      <div class="animate-pulse bg-gray-200 rounded-lg h-80"></div>
+      <div class="animate-pulse bg-gray-200 rounded-lg h-80"></div>
+      <div class="animate-pulse bg-gray-200 rounded-lg h-80"></div>
+    </div>
+  </div>
+</section>
+
+  <!-- About Section (hidden by default) -->
