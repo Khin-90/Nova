@@ -8,39 +8,48 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabContents = document.querySelectorAll(".tab-content");
   const orderFilterButtons = document.querySelectorAll(".order-filter-btn");
+  const sendNewsletterForm = document.getElementById("send-newsletter-form");
+  const newsletterResponseMessageDiv = document.getElementById("newsletter-response-message");
 
   // Tab switching
   tabButtons.forEach(button => {
     button.addEventListener("click", () => {
       const tabId = button.getAttribute("data-tab");
       
-      // Update active tab button
       tabButtons.forEach(btn => {
-        btn.classList.remove("border-indigo-600", "text-indigo-600");
-        btn.classList.add("border-transparent", "text-gray-600");
+        btn.classList.remove("border-indigo-600", "text-indigo-600", "font-semibold");
+        btn.classList.add("border-transparent", "text-gray-600", "font-medium");
       });
-      button.classList.add("border-indigo-600", "text-indigo-600");
-      button.classList.remove("border-transparent", "text-gray-600");
+      button.classList.add("border-indigo-600", "text-indigo-600", "font-semibold");
+      button.classList.remove("border-transparent", "text-gray-600", "font-medium");
       
-      // Show active tab content
       tabContents.forEach(content => content.classList.remove("active"));
-      document.getElementById(`${tabId}-tab`).classList.add("active");
+      const activeTabContent = document.getElementById(`${tabId}-tab`);
+      if (activeTabContent) {
+        activeTabContent.classList.add("active");
+      }
       
-      // Load data if needed
       if (tabId === "orders") {
         fetchOrders();
       } else if (tabId === "products") {
         fetchProducts();
+      } else if (tabId === "newsletter") {
+        // Initialize newsletter tab if needed
       }
     });
   });
+
+  // Set initial active tab (Products)
+  const initialTab = document.querySelector(".tab-btn[data-tab='products']");
+  if (initialTab) {
+    initialTab.click(); // Simulate a click to set the initial state correctly
+  }
 
   // Order filter buttons
   orderFilterButtons.forEach(button => {
     button.addEventListener("click", () => {
       const status = button.getAttribute("data-status");
       
-      // Update active filter button
       orderFilterButtons.forEach(btn => {
         btn.classList.remove("bg-indigo-600", "text-white");
         btn.classList.add("bg-gray-200");
@@ -51,6 +60,54 @@ document.addEventListener("DOMContentLoaded", () => {
       fetchOrders(status);
     });
   });
+
+  // --- Newsletter Sending --- 
+  if (sendNewsletterForm) {
+    sendNewsletterForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      showResponseMessage(newsletterResponseMessageDiv, "", ""); // Clear previous messages
+
+      const subject = document.getElementById("newsletter-subject").value;
+      const recipients = document.getElementById("newsletter-recipients").value;
+      const body = document.getElementById("newsletter-body").value;
+
+      if (!subject || !recipients || !body) {
+        showResponseMessage(newsletterResponseMessageDiv, "Error: Please fill in all fields.", "error");
+        return;
+      }
+
+      // Basic email validation for recipients
+      const emailArray = recipients.split(',').map(email => email.trim()).filter(email => email);
+      const invalidEmails = emailArray.filter(email => !/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email));
+
+      if (invalidEmails.length > 0) {
+        showResponseMessage(newsletterResponseMessageDiv, `Error: Invalid email(s) found: ${invalidEmails.join(', ')}`, "error");
+        return;
+      }
+
+      if (emailArray.length === 0) {
+        showResponseMessage(newsletterResponseMessageDiv, "Error: No valid recipient emails provided.", "error");
+        return;
+      }
+
+      const mailtoLink = `mailto:${emailArray.join(',')}` +
+                         `?subject=${encodeURIComponent(subject)}` +
+                         `&body=${encodeURIComponent(body)}`;
+
+      if (mailtoLink.length > 2000) { // Check for potential mailto length limits
+         showResponseMessage(newsletterResponseMessageDiv, "Warning: The newsletter content or recipient list is very long. This might exceed the limits of your email client. Consider sending in smaller batches.", "warning");
+      } else {
+        showResponseMessage(newsletterResponseMessageDiv, "Opening your email client to send the newsletter...", "success");
+      }
+      
+      // Open the mailto link
+      window.location.href = mailtoLink;
+      
+      // Optionally, clear the form after attempting to send
+      // sendNewsletterForm.reset(); 
+      // It might be better not to reset, in case the mailto fails and user wants to try again or copy content.
+    });
+  }
 
   // --- Product Management ---
   async function fetchProducts() {
@@ -97,23 +154,22 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="tag tag-${tag}">${formatTagName(tag)}</span>
       `).join("") || "";
 
-      // *** FIX: Prepend API_BASE_URL to image src ***
-      const imageUrl = product.image.startsWith("http") ? product.image : `${API_BASE_URL}${product.image}`;
+      const imageUrl = product.image && product.image.startsWith("http") ? product.image : `${API_BASE_URL}${product.image || ''}`;
 
       productElement.innerHTML = `
         <div class="flex items-center space-x-4">
           <div class="relative">
             ${tagsHTML}
-            <img src="${imageUrl}?${Date.now()}" alt="${product.name}" 
+            <img src="${imageUrl}?${Date.now()}" alt="${product.name || 'Product'}" 
                  class="w-16 h-16 object-cover rounded border">
           </div>
           <div>
-            <h3 class="font-semibold">${product.name}</h3>
-            <p class="text-sm text-gray-600">${product.category} - KES ${product.price.toFixed(2)}</p>
-            <p class="text-xs text-gray-500">ID: ${product.id}</p>
+            <h3 class="font-semibold">${product.name || 'Unknown Product'}</h3>
+            <p class="text-sm text-gray-600">${product.category || 'Uncategorized'} - KES ${(product.price || 0).toFixed(2)}</p>
+            <p class="text-xs text-gray-500">ID: ${product.id || 'N/A'}</p>
           </div>
         </div>
-        <button data-id="${product.id}" 
+        <button data-id="${product.id || ''}" 
                 class="delete-product-btn bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm transition-colors">
           Delete
         </button>
@@ -123,7 +179,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     productListDiv.appendChild(productsContainer);
 
-    // Add event listeners to delete buttons
     document.querySelectorAll(".delete-product-btn").forEach(button => {
       button.addEventListener("click", handleDeleteProduct);
     });
@@ -159,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (orders.length === 0) {
       ordersListDiv.innerHTML = `
         <div class="p-4 bg-blue-100 border border-blue-400 text-blue-700 rounded">
-          No orders found.
+          No orders found for the selected filter.
         </div>`;
       return;
     }
@@ -172,16 +227,15 @@ document.addEventListener("DOMContentLoaded", () => {
       orderElement.className = `order-item p-4 border rounded-lg bg-white ${order.status === 'delivered' ? 'bg-green-50' : ''}`;
       
       const itemsHTML = order.items.map(item => {
-        // *** FIX: Prepend API_BASE_URL to image src ***
-        const imageUrl = item.image.startsWith("http") ? item.image : `${API_BASE_URL}${item.image}`;
+        const imageUrl = item.image && item.image.startsWith("http") ? item.image : `${API_BASE_URL}${item.image || ''}`;
         return `
-          <div class="flex items-center py-2 border-b">
-            <img src="${imageUrl}?${Date.now()}" alt="${item.name}" class="w-12 h-12 object-cover rounded mr-3">
+          <div class="flex items-center py-2 border-b last:border-b-0">
+            <img src="${imageUrl}?${Date.now()}" alt="${item.name || 'Product'}" class="w-12 h-12 object-cover rounded mr-3">
             <div class="flex-grow">
-              <h4 class="font-medium">${item.name}</h4>
-              <p class="text-sm text-gray-600">Size: ${item.size} | Qty: ${item.quantity}</p>
+              <h4 class="font-medium">${item.name || 'Unknown Product'}</h4>
+              <p class="text-sm text-gray-600">Size: ${item.size || 'N/A'} | Qty: ${item.quantity || 0}</p>
             </div>
-            <span class="font-medium">KES ${(item.price * item.quantity).toFixed(2)}</span>
+            <span class="font-medium">KES ${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</span>
           </div>
         `;
       }).join("");
@@ -189,40 +243,40 @@ document.addEventListener("DOMContentLoaded", () => {
       orderElement.innerHTML = `
         <div class="flex justify-between items-start mb-2">
           <div>
-            <h3 class="font-bold">Order #${order.orderId}</h3>
-            <p class="text-sm text-gray-600">${new Date(order.createdAt).toLocaleString()}</p>
+            <h3 class="font-bold">Order #${order.orderId || 'N/A'}</h3>
+            <p class="text-sm text-gray-600">${order.createdAt ? new Date(order.createdAt).toLocaleString() : 'N/A'}</p>
           </div>
           <span class="px-3 py-1 rounded-full text-sm font-medium 
                 ${order.status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
-            ${order.status === 'delivered' ? 'Delivered' : 'Pending'}
+            ${order.status ? (order.status.charAt(0).toUpperCase() + order.status.slice(1)) : 'Pending'}
           </span>
         </div>
         
-        <div class="mb-4">
+        <div class="mb-4 border-t border-b py-2">
           ${itemsHTML}
         </div>
         
-        <div class="flex justify-between items-center border-t pt-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-3">
           <div>
-            <p class="font-medium">Customer: ${order.customerName}</p>
-            <p class="text-sm text-gray-600">${order.phone}</p>
-            <p class="text-sm">${order.location}</p>
+            <p class="font-medium">Customer: ${order.customerName || 'N/A'}</p>
+            <p class="text-sm text-gray-600">Phone: ${order.phone || 'N/A'}</p>
+            <p class="text-sm">Location: ${order.location || 'N/A'}</p>
           </div>
-          <div class="text-right">
-            <p class="font-medium">Subtotal: KES ${order.subtotal.toFixed(2)}</p>
-            <p class="text-sm">Delivery: KES ${order.deliveryFee.toFixed(2)}</p>
-            <p class="font-bold">Total: KES ${order.total.toFixed(2)}</p>
+          <div class="text-left md:text-right">
+            <p class="font-medium">Subtotal: KES ${(order.subtotal || 0).toFixed(2)}</p>
+            <p class="text-sm">Delivery: KES ${(order.deliveryFee || 0).toFixed(2)}</p>
+            <p class="font-bold">Total: KES ${(order.total || 0).toFixed(2)}</p>
           </div>
         </div>
         
         <div class="flex justify-end space-x-2 mt-3">
           ${order.status !== 'delivered' ? `
-            <button data-id="${order._id}" 
+            <button data-id="${order._id || ''}" 
                     class="mark-delivered-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm transition-colors">
               Mark Delivered
             </button>
           ` : ''}
-          <button data-id="${order._id}" 
+          <button data-id="${order._id || ''}" 
                   class="delete-order-btn bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm transition-colors">
             Delete
           </button>
@@ -234,7 +288,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     ordersListDiv.appendChild(ordersContainer);
 
-    // Add event listeners to order action buttons
     document.querySelectorAll(".mark-delivered-btn").forEach(button => {
       button.addEventListener("click", handleMarkDelivered);
     });
@@ -245,51 +298,52 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Handle Add Product Form Submission ---
-  addProductForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    showResponseMessage(addResponseMessageDiv, "", "");
+  if (addProductForm) {
+    addProductForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showResponseMessage(addResponseMessageDiv, "", "");
 
-    const formData = new FormData(addProductForm);
-    const tags = Array.from(addProductForm.querySelectorAll('input[name="tags"]:checked'))
-                  .map(checkbox => checkbox.value);
-    
-    // Append tags to formData
-    tags.forEach(tag => formData.append('tags', tag));
+      const formData = new FormData(addProductForm);
+      const tags = Array.from(addProductForm.querySelectorAll('input[name="tags"]:checked'))
+                    .map(checkbox => checkbox.value);
+      
+      tags.forEach(tag => formData.append('tags', tag));
 
-    const submitButton = addProductForm.querySelector("button[type='submit']");
-    const originalButtonText = submitButton.textContent;
-    
-    submitButton.disabled = true;
-    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Adding...';
+      const submitButton = addProductForm.querySelector("button[type='submit']");
+      const originalButtonText = submitButton.innerHTML; // Save full HTML content
+      
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Adding...';
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/products`, {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/products`, {
+          method: "POST",
+          body: formData,
+        });
 
-      const result = await response.json();
+        const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.msg || `HTTP error! status: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(result.msg || `HTTP error! status: ${response.status}`);
+        }
+
+        showResponseMessage(addResponseMessageDiv, `Success: ${result.name || 'Product'} added.`, "success");
+        addProductForm.reset();
+        await fetchProducts();
+
+      } catch (error) {
+        console.error("Error adding product:", error);
+        showResponseMessage(addResponseMessageDiv, `Error: ${error.message}`, "error");
+      } finally {
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
       }
-
-      showResponseMessage(addResponseMessageDiv, `Success: ${result.name} added.`, "success");
-      addProductForm.reset();
-      await fetchProducts(); // Refresh the product list
-
-    } catch (error) {
-      console.error("Error adding product:", error);
-      showResponseMessage(addResponseMessageDiv, `Error: ${error.message}`, "error");
-    } finally {
-      submitButton.disabled = false;
-      submitButton.innerHTML = originalButtonText;
-    }
-  });
+    });
+  }
 
   // --- Handle Delete Product ---
   async function handleDeleteProduct(event) {
-    const button = event.target;
+    const button = event.target.closest(".delete-product-btn");
     const productId = button.getAttribute("data-id");
     showResponseMessage(deleteResponseMessageDiv, "", "");
 
@@ -297,7 +351,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const originalButtonText = button.textContent;
+    const originalButtonText = button.innerHTML;
     button.disabled = true;
     button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Deleting...';
 
@@ -312,12 +366,14 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(result.msg || `HTTP error! status: ${response.status}`);
       }
 
-      showResponseMessage(deleteResponseMessageDiv, `Success: ${result.msg}`, "success");
+      showResponseMessage(deleteResponseMessageDiv, `Success: ${result.msg || 'Product deleted.'}`, "success");
       await fetchProducts();
 
     } catch (error) {
       console.error("Error deleting product:", error);
       showResponseMessage(deleteResponseMessageDiv, `Error: ${error.message}`, "error");
+    } finally {
+      // Ensure button is re-enabled and text restored even if fetchProducts() fails or is slow
       button.disabled = false;
       button.innerHTML = originalButtonText;
     }
@@ -325,14 +381,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Handle Mark Order as Delivered ---
   async function handleMarkDelivered(event) {
-    const button = event.target;
+    const button = event.target.closest(".mark-delivered-btn");
     const orderId = button.getAttribute("data-id");
 
     if (!confirm("Mark this order as delivered?")) {
       return;
     }
 
-    const originalButtonText = button.textContent;
+    const originalButtonText = button.innerHTML;
     button.disabled = true;
     button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Updating...';
 
@@ -347,13 +403,13 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(result.msg || `HTTP error! status: ${response.status}`);
       }
 
-      // Refresh orders list
       const activeFilter = document.querySelector(".order-filter-btn.bg-indigo-600").getAttribute("data-status");
       await fetchOrders(activeFilter);
 
     } catch (error) {
       console.error("Error marking order as delivered:", error);
-      alert(`Error: ${error.message}`);
+      alert(`Error: ${error.message}`); // Simple alert for this action
+    } finally {
       button.disabled = false;
       button.innerHTML = originalButtonText;
     }
@@ -361,18 +417,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Handle Delete Order ---
   async function handleDeleteOrder(event) {
-    const button = event.target;
+    const button = event.target.closest(".delete-order-btn");
     const orderId = button.getAttribute("data-id");
 
-    // Check if order is delivered
     const orderElement = button.closest(".order-item");
-    const isDelivered = orderElement.querySelector(".bg-green-100") !== null;
+    const isDelivered = orderElement.querySelector(".bg-green-100.text-green-800") !== null;
 
     if (!isDelivered && !confirm("This order is not yet delivered. Are you sure you want to delete it?")) {
       return;
     }
+    if (isDelivered && !confirm("Are you sure you want to delete this delivered order?")){
+        return;
+    }
 
-    const originalButtonText = button.textContent;
+    const originalButtonText = button.innerHTML;
     button.disabled = true;
     button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Deleting...';
 
@@ -387,13 +445,13 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(result.msg || `HTTP error! status: ${response.status}`);
       }
 
-      // Refresh orders list
       const activeFilter = document.querySelector(".order-filter-btn.bg-indigo-600").getAttribute("data-status");
       await fetchOrders(activeFilter);
 
     } catch (error) {
       console.error("Error deleting order:", error);
-      alert(`Error: ${error.message}`);
+      alert(`Error: ${error.message}`); // Simple alert for this action
+    } finally {
       button.disabled = false;
       button.innerHTML = originalButtonText;
     }
@@ -407,25 +465,35 @@ document.addEventListener("DOMContentLoaded", () => {
       'coming-soon': 'Coming Soon',
       'sale': 'Sale'
     };
-    return names[tag] || tag;
+    return names[tag] || tag.charAt(0).toUpperCase() + tag.slice(1);
   }
 
   function showResponseMessage(element, message, type) {
+    if (!element) return;
     element.textContent = message;
-    element.className = `p-3 rounded-md ${type === "success" 
+    element.className = `p-3 my-2 rounded-md text-sm ${type === "success" 
       ? "bg-green-100 border border-green-400 text-green-700" 
+      : type === "warning" 
+      ? "bg-yellow-100 border border-yellow-400 text-yellow-700" 
       : "bg-red-100 border border-red-400 text-red-700"}`;
     element.classList.remove("hidden");
 
-    // Hide message after 5 seconds
-    setTimeout(() => {
-      element.classList.add("hidden");
-      element.textContent = "";
-      element.className = "";
-    }, 5000);
+    if (type !== "warning") { // Warnings might need to stay longer or be dismissed manually
+        setTimeout(() => {
+        element.classList.add("hidden");
+        element.textContent = "";
+        element.className = "hidden mt-4"; // Reset to default hidden classes
+        }, 5000);
+    }
   }
 
   // --- Initial Load ---
-  fetchProducts();
+  // Default to products tab, which will call fetchProducts()
+  if (initialTab) {
+    // Already clicked above, so products should be loading.
+  } else {
+    // Fallback if initialTab somehow wasn't found
+    fetchProducts(); 
+  }
 });
 

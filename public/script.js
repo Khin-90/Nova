@@ -557,11 +557,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- Form Handling ---
-  async function handleContactFormSubmit(event) {
+   // --- Form Handling - Updated for Formspree ---
+   async function handleContactFormSubmit(event) {
     event.preventDefault();
     const form = event.target;
-    const formData = new FormData(form);
     const responseDiv = document.getElementById("contact-response");
     const submitButton = form.querySelector("button[type='submit']");
     const originalButtonText = submitButton.textContent;
@@ -571,6 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponse(responseDiv, "", "");
 
     try {
+      const formData = new FormData(form);
       const response = await fetch(form.action, {
         method: 'POST',
         body: formData,
@@ -583,8 +583,8 @@ document.addEventListener("DOMContentLoaded", () => {
         showResponse(responseDiv, "Message sent successfully! We'll get back to you soon.", "success");
         form.reset();
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send message');
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send message');
       }
     } catch (error) {
       console.error("Error submitting contact form:", error);
@@ -598,7 +598,6 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleNewsletterSubmit(event) {
     event.preventDefault();
     const form = event.target;
-    const formData = new FormData(form);
     const responseDiv = document.getElementById("newsletter-response");
     const submitButton = form.querySelector("button[type='submit']");
     const originalButtonText = submitButton.textContent;
@@ -608,6 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showResponse(responseDiv, "", "");
 
     try {
+      const formData = new FormData(form);
       const response = await fetch(form.action, {
         method: 'POST',
         body: formData,
@@ -620,8 +620,8 @@ document.addEventListener("DOMContentLoaded", () => {
         showResponse(responseDiv, "Thanks for subscribing!", "success");
         form.reset();
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to subscribe');
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to subscribe');
       }
     } catch (error) {
       console.error("Error subscribing to newsletter:", error);
@@ -631,6 +631,7 @@ document.addEventListener("DOMContentLoaded", () => {
       submitButton.innerHTML = originalButtonText;
     }
   }
+
 
   // --- M-Pesa Checkout ---
   async function handleMpesaCheckout() {
