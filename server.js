@@ -14,12 +14,39 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+
+// Define allowed origins for CORS
+const allowedOrigins = [
+  "https://novawearke.netlify.app",
+  "https://novawear.onrender.com",
+  "http://localhost:3000", 
+  "http://127.0.0.1:3000"
+];
+
+// Configure CORS options
+const corsOptions = {
+  origin: function (origin, callback ) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = "The CORS policy for this site does not allow access from the specified Origin.";
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true, // Allow cookies to be sent
+  optionsSuccessStatus: 204 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
-// Serve static files (HTML, CSS, JS) from the 'public' directory
-// This will serve index.html for '/', admin.html for '/admin.html', etc.
-// Make sure your admin.html, index.html, script.js, and styles.css are in a 'public' folder.
+// Serve static files (HTML, CSS, JS) from the \'public\' directory
+// This will serve index.html for \'/', admin.html for \'/admin.html\', etc.
+// Make sure your admin.html, index.html, script.js, and styles.css are in a \'public\' folder.
 app.use(express.static(path.join(__dirname, "public")));
 
 // MongoDB Connection
