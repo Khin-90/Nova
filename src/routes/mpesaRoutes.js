@@ -26,6 +26,7 @@ async function getDarajaToken() {
     return response.data.access_token;
   } catch (error) {
     console.error("Error getting Daraja token:", error.response ? error.response.data : error.message);
+    console.error("Full error object:", error);
     throw new Error("Failed to authenticate with Daraja API.");
   }
 }
@@ -125,7 +126,7 @@ router.post("/callback", (req, res) => {
   // TODO: Process the callback data
   // 1. Check if ResultCode is 0 (success)
   // 2. Find the corresponding order in your database using MerchantRequestID or CheckoutRequestID
-  // 3. Update the order status to 'paid'
+  // 3. Update the order status to \'paid\'
   // 4. Handle potential errors or cancellations (ResultCode != 0)
 
   // Respond to Safaricom to acknowledge receipt
@@ -134,4 +135,6 @@ router.post("/callback", (req, res) => {
 
 
 module.exports = router;
+
+
 
